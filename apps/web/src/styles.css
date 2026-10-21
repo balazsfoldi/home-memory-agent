@@ -184,6 +184,25 @@ button:disabled {
   font-size: 10px;
   line-height: 1.5;
 }
+.language-picker {
+  display: grid;
+  gap: 6px;
+  margin: 0 2px 14px;
+  color: #858980;
+  font-size: 10px;
+  font-weight: 600;
+}
+.language-picker select {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #e5e8e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #4c514a;
+  font: inherit;
+  cursor: pointer;
+}
 .privacy-indicator {
   position: absolute;
   top: 15px;
@@ -1555,6 +1574,19 @@ button:disabled {
   .sidebar-memory-card,
   .sidebar-footer {
     display: none;
+  }
+  .language-picker {
+    width: 48px;
+    gap: 0;
+    margin: 0 0 14px;
+  }
+  .language-picker > span {
+    display: none;
+  }
+  .language-picker select {
+    min-height: 32px;
+    padding: 5px 1px;
+    font-size: 9px;
   }
   .navigation {
     width: 100%;

@@ -16,6 +16,7 @@ import type {
   SettingsResponse,
 } from '@home-memory/shared';
 import { ApiClientError, api } from './api/client.js';
+import { LanguageProvider, useI18n } from './i18n.js';
 
 type Page = 'chat' | 'memories' | 'settings';
 type ChatEntry = {
@@ -28,8 +29,11 @@ type ChatEntry = {
   result?: 'accepted' | 'dismissed';
 };
 
-function priorityLabel(priority: 'low' | 'normal' | 'high'): string {
-  return priority === 'high' ? 'Fontos' : priority === 'low' ? 'Alacsony' : 'Normál';
+function priorityLabel(
+  priority: 'low' | 'normal' | 'high',
+  t: (key: string) => string,
+): string {
+  return priority === 'high' ? t('Fontos') : priority === 'low' ? t('Alacsony') : t('Normál');
 }
 
 function PrioritySelect({
@@ -39,35 +43,15 @@ function PrioritySelect({
   value: 'low' | 'normal' | 'high';
   onChange: (value: 'low' | 'normal' | 'high') => void;
 }) {
+  const { t } = useI18n();
   return (
     <select value={value} onChange={(event) => onChange(event.target.value as typeof value)}>
-      <option value="low">Alacsony</option>
-      <option value="normal">Normál</option>
-      <option value="high">Fontos</option>
+      <option value="low">{t('Alacsony')}</option>
+      <option value="normal">{t('Normál')}</option>
+      <option value="high">{t('Fontos')}</option>
     </select>
   );
 }
-
-const pageContent: Record<Page, { eyebrow: string; title: string; description: string }> = {
-  chat: {
-    eyebrow: 'A TE SZEMÉLYES ASSZISZTENSED',
-    title: 'Emlékszem, ami fontos.',
-    description:
-      'A kérdésedre válaszolok, figyelembe véve azokat az emlékeket, amelyek tényleg segítenek.',
-  },
-  memories: {
-    eyebrow: 'A TE ADATAID, A TE DÖNTÉSED',
-    title: 'Amit érdemes észben tartani.',
-    description:
-      'Nézd át, pontosítsd vagy felejtsd el a személyes emlékeidet, amikor csak szeretnéd.',
-  },
-  settings: {
-    eyebrow: 'MINDEN FELETT TE RENDELKEZEL',
-    title: 'A saját tárhelyeden.',
-    description:
-      'Az emlékeid az otthoni szerveren maradnak. Te döntöd el, hová küldesz belőlük a válaszaidhoz.',
-  },
-};
 
 function Icon({
   name,
@@ -215,6 +199,19 @@ function Icon({
 }
 
 export function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
+}
+
+function AppContent() {
+  const { language, setLanguage, t } = useI18n();
+  const translateRef = useRef(t);
+  useEffect(() => {
+    translateRef.current = t;
+  }, [t]);
   const [page, setPage] = useState<Page>('chat');
   const [memories, setMemories] = useState<MemoryEnvelope[]>([]);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
@@ -230,6 +227,29 @@ export function App() {
   const conversationId = useRef<string | undefined>(undefined);
   const activeChat = useRef<AbortController | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const pageContent: Record<Page, { eyebrow: string; title: string; description: string }> = {
+    chat: {
+      eyebrow: t('A TE SZEMÉLYES ASSZISZTENSED'),
+      title: t('Emlékszem, ami fontos.'),
+      description: t(
+        'A kérdésedre válaszolok, figyelembe véve azokat az emlékeket, amelyek tényleg segítenek.',
+      ),
+    },
+    memories: {
+      eyebrow: t('A TE ADATAID, A TE DÖNTÉSED'),
+      title: t('Amit érdemes észben tartani.'),
+      description: t(
+        'Nézd át, pontosítsd vagy felejtsd el a személyes emlékeidet, amikor csak szeretnéd.',
+      ),
+    },
+    settings: {
+      eyebrow: t('MINDEN FELETT TE RENDELKEZEL'),
+      title: t('A saját tárhelyeden.'),
+      description: t(
+        'Az emlékeid az otthoni szerveren maradnak. Te döntöd el, hová küldesz belőlük a válaszaidhoz.',
+      ),
+    },
+  };
   const currentPage = pageContent[page];
 
   const loadMemories = useCallback(async (q?: string) => {
@@ -251,9 +271,11 @@ export function App() {
       .catch((failure: unknown) => {
         if (active)
           setError(
-            failure instanceof Error
-              ? failure.message
-              : 'Nem sikerült betölteni az alkalmazást.',
+            translateRef.current(
+              failure instanceof Error
+                ? failure.message
+                : 'Nem sikerült betölteni az alkalmazást.',
+            ),
           );
       })
       .finally(() => {
@@ -274,19 +296,23 @@ export function App() {
     const timer = window.setTimeout(() => {
       loadMemories(search.trim() || undefined).catch((failure: unknown) => {
         setError(
-          failure instanceof Error ? failure.message : 'Nem sikerült betölteni az emlékeket.',
+          t(
+            failure instanceof Error
+              ? failure.message
+              : 'Nem sikerült betölteni az emlékeket.',
+          ),
         );
       });
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [loadMemories, page, search]);
+  }, [loadMemories, page, search, t]);
 
   const categories = useMemo(
     () =>
       [...new Set(memories.map(({ memory }) => memory.category))].sort((a, b) =>
-        a.localeCompare(b, 'hu'),
+        a.localeCompare(b, language === 'hu' ? 'hu' : 'en'),
       ),
-    [memories],
+    [language, memories],
   );
 
   const clearConversationAfterMutation = useCallback(() => {
@@ -323,8 +349,9 @@ export function App() {
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            message:
+            message: t(
               'Az emlékeid közben megváltoztak, ezért új beszélgetési előzménnyel folytatom.',
+            ),
           },
         ]);
       }
@@ -347,8 +374,9 @@ export function App() {
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            message:
+            message: t(
               'A beszélgetés lejárt. Küldd el újra az üzeneted, és új előzményt kezdek.',
+            ),
           },
         ]);
       } else {
@@ -357,8 +385,9 @@ export function App() {
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            message:
+            message: t(
               failure instanceof Error ? failure.message : 'A válasz most nem érhető el.',
+            ),
           },
         ]);
       }
@@ -379,7 +408,7 @@ export function App() {
     setCreating(false);
     clearConversationAfterMutation();
     await loadMemories(search.trim() || undefined);
-    setNotice(`„${memory.memory.category}” kategóriában elmentettük az emléket.`);
+    setNotice(t('memorySaved', { category: memory.memory.category }));
   }
 
   async function handleMemoryChanged(message: string): Promise<void> {
@@ -400,16 +429,16 @@ export function App() {
       let message: string;
       if (action.action === 'CREATE_MEMORY') {
         const result = await api.createMemory(action.memory);
-        message = `„${result.memory.category}” kategóriában elmentettük az emléket.`;
+        message = t('memorySaved', { category: result.memory.category });
       } else if (action.action === 'UPDATE_MEMORY' && proposal.etag) {
         const result = await api.updateMemory(action.id, proposal.etag, action.memory);
-        message = `Frissítettük a „${result.memory.category}” kategóriájú emléket.`;
+        message = t('memoryUpdated', { category: result.memory.category });
       } else if (action.action === 'DELETE_MEMORY' && proposal.etag) {
         await api.deleteMemory(action.id, proposal.etag);
-        message = 'Töröltük az emléket a memóriatárból.';
+        message = t('memoryDeleted');
       } else {
         throw new Error(
-          'Nem sikerült ellenőrizni a kiválasztott emléket. Töltsd újra a listát.',
+          t('Nem sikerült ellenőrizni a kiválasztott emléket. Töltsd újra a listát.'),
         );
       }
       clearConversationAfterMutation();
@@ -419,7 +448,7 @@ export function App() {
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          message: `${message} A régi beszélgetési előzményt töröltük.`,
+          message: t('conversationResetNotice', { message }),
         },
       ]);
       setError('');
@@ -428,7 +457,11 @@ export function App() {
         items.map((item) => (item.id === entry.id ? { ...item, pending: false } : item)),
       );
       setError(
-        failure instanceof Error ? failure.message : 'A javaslatot nem sikerült végrehajtani.',
+        t(
+          failure instanceof Error
+            ? failure.message
+            : 'A javaslatot nem sikerült végrehajtani.',
+        ),
       );
     }
   }
@@ -464,16 +497,16 @@ export function App() {
       ]);
     } catch (failure) {
       setError(
-        failure instanceof Error ? failure.message : 'Az adatok frissítése nem sikerült.',
+        t(failure instanceof Error ? failure.message : 'Az adatok frissítése nem sikerült.'),
       );
     } finally {
       setLoading(false);
     }
-  }, [loadMemories, search]);
+  }, [loadMemories, search, t]);
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Fő navigáció">
+      <aside className="sidebar" aria-label={t('Fő navigáció')}>
         <a
           className="brand"
           href="#home"
@@ -481,7 +514,7 @@ export function App() {
             event.preventDefault();
             setPage('chat');
           }}
-          aria-label="Home Memory Agent, kezdőlap"
+          aria-label={t('Home Memory Agent, kezdőlap')}
         >
           <span className="brand-mark">
             <Icon name="book" size={21} />
@@ -491,13 +524,13 @@ export function App() {
           </span>
         </a>
 
-        <div className="nav-label">MUNKATERÜLET</div>
+        <div className="nav-label">{t('MUNKATERÜLET')}</div>
         <nav className="navigation">
           {(
             [
-              ['chat', 'Beszélgetés', 'chat'],
-              ['memories', 'Emlékeim', 'memory'],
-              ['settings', 'Beállítások', 'settings'],
+              ['chat', t('Beszélgetés'), 'chat'],
+              ['memories', t('Emlékeim'), 'memory'],
+              ['settings', t('Beállítások'), 'settings'],
             ] as const
           ).map(([id, label, icon]) => (
             <button
@@ -523,41 +556,54 @@ export function App() {
             <Icon name="lock" size={17} />
           </div>
           <div>
-            <p>Csak a tiéd.</p>
-            <span>Az emlékeid a saját tárhelyeden maradnak.</span>
+            <p>{t('Csak a tiéd.')}</p>
+            <span>{t('Az emlékeid a saját tárhelyeden maradnak.')}</span>
           </div>
           <div className="privacy-indicator">
             <Icon name="dot" size={12} />
           </div>
         </div>
+        <label className="language-picker">
+          <span>{t('Felület nyelve')}</span>
+          <select
+            aria-label={t('Felület nyelve')}
+            value={language}
+            onChange={(event) => setLanguage(event.target.value === 'hu' ? 'hu' : 'en')}
+          >
+            <option value="en">English</option>
+            <option value="hu">Magyar</option>
+          </select>
+        </label>
         <div className="sidebar-footer">
           <span className="footer-avatar">H</span>
           <span>Home Memory Agent</span>
-          <span className="version-tag">v0.2</span>
+          <span className="version-tag">v0.2.5</span>
         </div>
       </aside>
 
       <main className={`main-content page-${page}`}>
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Otthon</span>
+            <span>{t('Otthon')}</span>
             <span className="breadcrumb-slash">/</span>
             <strong>
               {page === 'chat'
-                ? 'Beszélgetés'
+                ? t('Beszélgetés')
                 : page === 'memories'
-                  ? 'Emlékeim'
-                  : 'Beállítások'}
+                  ? t('Emlékeim')
+                  : t('Beállítások')}
             </strong>
           </div>
           <div className="topbar-status">
             <span className={`status-dot${settings?.configured ? ' connected' : ''}`} />
             <span>
-              {settings?.configured ? 'Asszisztens csatlakoztatva' : 'Az asszisztens szünetel'}
+              {settings?.configured
+                ? t('Asszisztens csatlakoztatva')
+                : t('Az asszisztens szünetel')}
             </span>
             <button
               className="icon-button refresh-button"
-              aria-label="Adatok frissítése"
+              aria-label={t('Adatok frissítése')}
               onClick={() => void refresh()}
             >
               <Icon name="refresh" size={17} />
@@ -580,7 +626,7 @@ export function App() {
               <span>{error}</span>
               <button
                 className="inline-icon"
-                aria-label="Hiba bezárása"
+                aria-label={t('Hiba bezárása')}
                 onClick={() => setError('')}
               >
                 <Icon name="close" size={16} />
@@ -593,7 +639,7 @@ export function App() {
               <span>{notice}</span>
               <button
                 className="inline-icon"
-                aria-label="Értesítés bezárása"
+                aria-label={t('Értesítés bezárása')}
                 onClick={() => setNotice('')}
               >
                 <Icon name="close" size={16} />
@@ -625,9 +671,9 @@ export function App() {
             <section className="memories-panel">
               <div className="section-toolbar">
                 <div>
-                  <div className="section-kicker">A TE PRIVÁT TÁRAD</div>
+                  <div className="section-kicker">{t('A TE PRIVÁT TÁRAD')}</div>
                   <h2>
-                    Memóriák <span className="total-pill">{memoryTotal}</span>
+                    {t('Memóriák')} <span className="total-pill">{memoryTotal}</span>
                   </h2>
                 </div>
                 <button
@@ -635,7 +681,7 @@ export function App() {
                   onClick={() => setCreating((value) => !value)}
                 >
                   <Icon name={creating ? 'close' : 'plus'} size={17} />
-                  {creating ? 'Bezárás' : 'Új emlék'}
+                  {creating ? t('Bezárás') : t('Új emlék')}
                 </button>
               </div>
 
@@ -650,24 +696,26 @@ export function App() {
               <label className="search-field">
                 <Icon name="search" size={18} />
                 <input
-                  aria-label="Keresés az emlékek között"
+                  aria-label={t('Keresés az emlékek között')}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Keresés az emlékek között..."
+                  placeholder={t('Keresés az emlékek között...')}
                 />
                 <span className="search-shortcut">/</span>
               </label>
 
               <div className="memory-list-header">
                 <span>
-                  {search ? `${memoryTotal} TALÁLAT` : `${memoryTotal} ELMENTETT EMLÉK`}
+                  {search
+                    ? `${memoryTotal} ${t('TALÁLAT')}`
+                    : `${memoryTotal} ${t('ELMENTETT EMLÉK')}`}
                 </span>
-                <span>SZERKESZTÉS ÉS TÖRLÉS</span>
+                <span>{t('SZERKESZTÉS ÉS TÖRLÉS')}</span>
               </div>
               {loading ? (
                 <div className="empty-state">
                   <div className="spinner" />
-                  <p>Betöltés…</p>
+                  <p>{t('Betöltés…')}</p>
                 </div>
               ) : memories.length ? (
                 <div className="memory-list">
@@ -686,13 +734,15 @@ export function App() {
                   </div>
                   <h3>
                     {search
-                      ? 'Nem találtam egyező emléket.'
-                      : 'Itt kezdődnek a jó beszélgetések.'}
+                      ? t('Nem találtam egyező emléket.')
+                      : t('Itt kezdődnek a jó beszélgetések.')}
                   </h3>
                   <p>
                     {search
-                      ? 'Próbálj másik keresőkifejezést, vagy ellenőrizd a kategóriákat.'
-                      : 'Adj hozzá egy emléket, és az asszisztensed máris személyre szabottabb választ adhat.'}
+                      ? t('Próbálj másik keresőkifejezést, vagy ellenőrizd a kategóriákat.')
+                      : t(
+                          'Adj hozzá egy emléket, és az asszisztensed máris személyre szabottabb választ adhat.',
+                        )}
                   </p>
                   {!search && (
                     <button
@@ -700,14 +750,14 @@ export function App() {
                       onClick={() => setCreating(true)}
                     >
                       <Icon name="plus" size={16} />
-                      Első emlék hozzáadása
+                      {t('Első emlék hozzáadása')}
                     </button>
                   )}
                 </div>
               )}
               <div className="data-note">
                 <Icon name="lock" size={15} />
-                <span>Minden emléked ezen a szerveren marad.</span>
+                <span>{t('Minden emléked ezen a szerveren marad.')}</span>
               </div>
             </section>
           )}
@@ -722,8 +772,8 @@ export function App() {
           )}
         </div>
         <footer className="page-footer">
-          <span>Az emlékeid a tiéid.</span>
-          <span>Önálló, helyi és a tiéd.</span>
+          <span>{t('Az emlékeid a tiéid.')}</span>
+          <span>{t('Önálló, helyi és a tiéd.')}</span>
         </footer>
       </main>
     </div>
@@ -747,11 +797,12 @@ function ChatPanel(props: {
   onEditProposal: (id: string, action: MemoryAction) => void;
   onOpenSettings: () => void;
 }) {
+  const { language, t } = useI18n();
   const showWelcome = props.messages.length === 0;
   return (
     <section
       className={`chat-panel${showWelcome ? ' chat-welcome' : ''}`}
-      aria-label="Beszélgetés az asszisztenssel"
+      aria-label={t('Beszélgetés az asszisztenssel')}
     >
       {showWelcome ? (
         <div className="welcome-content">
@@ -760,15 +811,16 @@ function ChatPanel(props: {
               <Icon name="spark" size={25} />
             </div>
           </div>
-          <div className="welcome-overline">HOGYAN SEGÍTHETEK?</div>
+          <div className="welcome-overline">{t('HOGYAN SEGÍTHETEK?')}</div>
           <h2>
-            Ismerlek. Már amennyire
+            {t('Ismerlek. Már amennyire')}
             <br />
-            az emlékeid engedik.
+            {t('az emlékeid engedik.')}
           </h2>
           <p className="welcome-copy">
-            Kérdezz nyugodtan, vagy mondd el, mire emlékezzek. Egy jó beszélgetés néha csak egy
-            apró emléken múlik.
+            {t(
+              'Kérdezz nyugodtan, vagy mondd el, mire emlékezzek. Egy jó beszélgetés néha csak egy apró emléken múlik.',
+            )}
           </p>
           {!props.configured && (
             <button className="llm-setup-banner" onClick={props.onOpenSettings}>
@@ -776,8 +828,8 @@ function ChatPanel(props: {
                 <Icon name="spark" size={16} />
               </span>
               <span>
-                <strong>Az asszisztens beállításra vár</strong>
-                <span>Add meg az LLM-szolgáltató adatait a .env fájlban.</span>
+                <strong>{t('Az asszisztens beállításra vár')}</strong>
+                <span>{t('Add meg az LLM-szolgáltató adatait a .env fájlban.')}</span>
               </span>
               <Icon name="arrow" size={17} />
             </button>
@@ -786,18 +838,27 @@ function ChatPanel(props: {
             {[
               {
                 icon: 'moon' as const,
-                label: 'Mit vigyek magammal?',
-                question: 'What should I pack for a weekend hiking trip?',
+                label: t('Mit vigyek magammal?'),
+                question:
+                  language === 'en'
+                    ? 'What should I pack for a weekend hiking trip?'
+                    : 'Mit vigyek magammal egy hétvégi túrára?',
               },
               {
                 icon: 'spark' as const,
-                label: 'Mire emlékszel rólam?',
-                question: 'What do you remember about me?',
+                label: t('Mire emlékszel rólam?'),
+                question:
+                  language === 'en'
+                    ? 'What do you remember about me?'
+                    : 'Mire emlékszel rólam?',
               },
               {
                 icon: 'memory' as const,
-                label: 'Jegyezd meg ezt',
-                question: 'Remember that I like quiet places when travelling.',
+                label: t('Jegyezd meg ezt'),
+                question:
+                  language === 'en'
+                    ? 'Remember that I like quiet places when travelling.'
+                    : 'Jegyezd meg, hogy utazáskor a csendes helyeket szeretem.',
               },
             ].map((suggestion) => (
               <button
@@ -826,15 +887,15 @@ function ChatPanel(props: {
               )}
               <div className="message-body">
                 <div className="message-label">
-                  {entry.role === 'user' ? 'Te' : 'Home Memory'}
+                  {entry.role === 'user' ? t('Te') : 'Home Memory'}
                 </div>
-                <div className="message-bubble">{entry.message}</div>
+                <div className="message-bubble">{t(entry.message)}</div>
                 {entry.usedMemoryIds && entry.usedMemoryIds.length > 0 && (
                   <span className="used-memories">
                     <Icon name="memory" size={13} />
                     {entry.usedMemoryIds.length === 1
-                      ? '1 emléket vettem figyelembe'
-                      : `${entry.usedMemoryIds.length} emléket vettem figyelembe`}
+                      ? t('1 emléket vettem figyelembe')
+                      : t('usedMemories', { count: entry.usedMemoryIds.length })}
                   </span>
                 )}
                 {entry.proposal && (
@@ -870,17 +931,17 @@ function ChatPanel(props: {
       <div className="composer-wrap">
         {!props.configured && !showWelcome && (
           <div className="chat-paused-note">
-            <Icon name="lock" size={14} />A chathez nincs beállítva nyelvi modell. A memóriáid
-            továbbra is kezelhetők.
+            <Icon name="lock" size={14} />
+            {t('A chathez nincs beállítva nyelvi modell. A memóriáid továbbra is kezelhetők.')}
           </div>
         )}
         <div className={`chat-composer${!props.configured ? ' composer-disabled' : ''}`}>
           <textarea
-            aria-label="Üzenet az asszisztensnek"
+            aria-label={t('Üzenet az asszisztensnek')}
             placeholder={
               props.configured
-                ? 'Írj egy üzenetet…'
-                : 'Először állíts be egy nyelvi modellt a .env fájlban…'
+                ? t('Írj egy üzenetet…')
+                : t('Először állíts be egy nyelvi modellt a .env fájlban…')
             }
             value={props.text}
             disabled={!props.configured || props.sending}
@@ -892,7 +953,7 @@ function ChatPanel(props: {
           {props.sending ? (
             <button
               className="stop-send"
-              aria-label="Kérés megszakítása"
+              aria-label={t('Kérés megszakítása')}
               onClick={props.onCancel}
             >
               <span />
@@ -900,7 +961,7 @@ function ChatPanel(props: {
           ) : (
             <button
               className="send-button"
-              aria-label="Üzenet küldése"
+              aria-label={t('Üzenet küldése')}
               disabled={!props.text.trim() || !props.configured}
               onClick={props.onSend}
             >
@@ -911,9 +972,9 @@ function ChatPanel(props: {
         <div className="composer-caption">
           <span>
             <Icon name="lock" size={13} />
-            Az emlékeid a saját tárhelyeden maradnak.
+            {t('Az emlékeid a saját tárhelyeden maradnak.')}
           </span>
-          <span>Enter küldés · Shift + Enter új sor</span>
+          <span>{t('Enter küldés · Shift + Enter új sor')}</span>
         </div>
       </div>
     </section>
@@ -931,6 +992,7 @@ function ProposalCard({
   onDismiss: () => void;
   onEdit: (action: MemoryAction) => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
@@ -940,10 +1002,10 @@ function ProposalCard({
   const { action, currentMemory } = proposal;
   const title =
     action.action === 'CREATE_MEMORY'
-      ? 'Új emlék javaslat'
+      ? t('Új emlék javaslat')
       : action.action === 'UPDATE_MEMORY'
-        ? 'Módosítási javaslat'
-        : 'Törlési javaslat';
+        ? t('Módosítási javaslat')
+        : t('Törlési javaslat');
   const newContent = action.action === 'DELETE_MEMORY' ? null : action.memory.content;
   const proposedPriority =
     action.action === 'DELETE_MEMORY'
@@ -973,36 +1035,40 @@ function ProposalCard({
         <div>
           <strong>{title}</strong>
           <span>
-            {proposal.source === 'automatic' ? 'Automatikus emlékötlet' : 'A kérésed alapján'}{' '}
-            · ellenőrizd jóváhagyás előtt.
+            {proposal.source === 'automatic'
+              ? t('Automatikus emlékötlet')
+              : t('A kérésed alapján')}
+            {t(' · ellenőrizd jóváhagyás előtt.')}
           </span>
         </div>
-        <span className="approval-label">A TE DÖNTÉSED</span>
+        <span className="approval-label">{t('A TE DÖNTÉSED')}</span>
       </div>
       {currentMemory && (
         <div className="proposal-old">
-          <span>{action.action === 'DELETE_MEMORY' ? 'EZ AZ EMLÉK TÖRLŐDNE' : 'MOST'}</span>
+          <span>
+            {action.action === 'DELETE_MEMORY' ? t('EZ AZ EMLÉK TÖRLŐDNE') : t('MOST')}
+          </span>
           <p>{currentMemory.content}</p>
           <small>
-            {currentMemory.category} · {priorityLabel(currentMemory.priority)}
+            {currentMemory.category} · {priorityLabel(currentMemory.priority, t)}
           </small>
         </div>
       )}
       {newContent && (
         <div className="proposal-new">
-          <span>{currentMemory ? 'JAVASOLT SZÖVEG' : 'ELMENTENDŐ SZÖVEG'}</span>
+          <span>{currentMemory ? t('JAVASOLT SZÖVEG') : t('ELMENTENDŐ SZÖVEG')}</span>
           <p>{newContent}</p>
           <small>
             {action.action === 'DELETE_MEMORY'
               ? ''
-              : `${action.memory.category} · ${priorityLabel(proposedPriority ?? 'normal')}`}
+              : `${action.memory.category} · ${priorityLabel(proposedPriority ?? 'normal', t)}`}
           </small>
         </div>
       )}
       {editing && action.action !== 'DELETE_MEMORY' && (
         <div className="proposal-edit-form">
           <label>
-            Kategória
+            {t('Kategória')}
             <input
               value={category}
               maxLength={80}
@@ -1010,7 +1076,7 @@ function ProposalCard({
             />
           </label>
           <label>
-            Javasolt emlék
+            {t('Javasolt emlék')}
             <textarea
               value={content}
               maxLength={2_000}
@@ -1019,7 +1085,7 @@ function ProposalCard({
             />
           </label>
           <label>
-            Prioritás
+            {t('Prioritás')}
             <PrioritySelect value={priority} onChange={setPriority} />
           </label>
           <div className="proposal-edit-actions">
@@ -1027,14 +1093,14 @@ function ProposalCard({
               className="button button-quiet button-small"
               onClick={() => setEditing(false)}
             >
-              Mégse
+              {t('Mégse')}
             </button>
             <button
               className="button button-primary button-small"
               disabled={!category.trim() || !content.trim()}
               onClick={saveEdit}
             >
-              Módosítás alkalmazása
+              {t('Módosítás alkalmazása')}
             </button>
           </div>
         </div>
@@ -1043,8 +1109,8 @@ function ProposalCard({
         <div className="proposal-dismissed">
           <Icon name="check" size={15} />
           {entry.result === 'accepted'
-            ? 'A javaslat mentése sikerült.'
-            : 'A javaslatot elutasítottad.'}
+            ? t('A javaslat mentése sikerült.')
+            : t('A javaslatot elutasítottad.')}
         </div>
       ) : (
         <>
@@ -1055,7 +1121,7 @@ function ProposalCard({
                 disabled={entry.pending}
                 onClick={startEditing}
               >
-                Javaslat szerkesztése
+                {t('Javaslat szerkesztése')}
               </button>
             </div>
           )}
@@ -1065,7 +1131,7 @@ function ProposalCard({
               disabled={entry.pending}
               onClick={onDismiss}
             >
-              Elutasítás
+              {t('Elutasítás')}
             </button>
             <button
               className={`button ${action.action === 'DELETE_MEMORY' ? 'button-danger' : 'button-primary'}`}
@@ -1073,7 +1139,7 @@ function ProposalCard({
               onClick={onAccept}
             >
               <Icon name={entry.pending ? 'dot' : 'check'} size={15} />
-              {entry.pending ? 'Mentés…' : 'Jóváhagyom'}
+              {entry.pending ? t('Mentés…') : t('Jóváhagyom')}
             </button>
           </div>
         </>
@@ -1091,6 +1157,7 @@ function CreateMemoryForm({
   onCancel: () => void;
   onCreated: (memory: MemoryEnvelope) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
@@ -1103,7 +1170,7 @@ function CreateMemoryForm({
     try {
       await onCreated(await api.createMemory({ category, content, priority }));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'A mentés nem sikerült.');
+      setError(t(failure instanceof Error ? failure.message : 'A mentés nem sikerült.'));
     } finally {
       setSubmitting(false);
     }
@@ -1115,20 +1182,25 @@ function CreateMemoryForm({
           <Icon name="plus" size={18} />
         </span>
         <div>
-          <strong>Egy új, fontos emlék</strong>
-          <span>Röviden írd le úgy, hogy később is érthető legyen.</span>
+          <strong>{t('Egy új, fontos emlék')}</strong>
+          <span>{t('Röviden írd le úgy, hogy később is érthető legyen.')}</span>
         </div>
-        <button type="button" className="icon-button" aria-label="Bezárás" onClick={onCancel}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={t('Bezárás')}
+          onClick={onCancel}
+        >
           <Icon name="close" size={18} />
         </button>
       </div>
       <label>
-        Kategória
+        {t('Kategória')}
         <input
           required
           list="memory-category-options"
           autoComplete="off"
-          placeholder="Például: Utazás, Otthon…"
+          placeholder={t('Például: Utazás, Otthon…')}
           maxLength={80}
           value={category}
           onChange={(event) => setCategory(event.target.value)}
@@ -1140,10 +1212,12 @@ function CreateMemoryForm({
         </datalist>
       </label>
       <label>
-        Mi legyen az emlék?
+        {t('Mi legyen az emlék?')}
         <textarea
           required
-          placeholder="Például: Csendes, természetközeli szállásokat keresek, ha kirándulni megyek."
+          placeholder={t(
+            'Például: Csendes, természetközeli szállásokat keresek, ha kirándulni megyek.',
+          )}
           maxLength={2_000}
           rows={3}
           value={content}
@@ -1151,7 +1225,7 @@ function CreateMemoryForm({
         />
       </label>
       <label>
-        Prioritás
+        {t('Prioritás')}
         <PrioritySelect value={priority} onChange={setPriority} />
       </label>
       {error && (
@@ -1161,10 +1235,10 @@ function CreateMemoryForm({
       )}
       <div className="form-actions">
         <button className="button button-quiet" type="button" onClick={onCancel}>
-          Mégse
+          {t('Mégse')}
         </button>
         <button className="button button-primary" disabled={submitting}>
-          {submitting ? 'Mentés…' : 'Emlék mentése'}
+          {submitting ? t('Mentés…') : t('Emlék mentése')}
           <Icon name="arrow" size={16} />
         </button>
       </div>
@@ -1179,6 +1253,7 @@ function MemoryCard({
   envelope: MemoryEnvelope;
   onChanged: (message: string) => Promise<void>;
 }) {
+  const { language, t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [category, setCategory] = useState(envelope.memory.category);
@@ -1204,9 +1279,9 @@ function MemoryCard({
     try {
       await api.updateMemory(memory.id, envelope.etag, { category, content, priority });
       setEditing(false);
-      await onChanged(`Frissítettük a „${category.trim()}” kategóriájú emléket.`);
+      await onChanged(t('memoryUpdated', { category: category.trim() }));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'A mentés nem sikerült.');
+      setError(t(failure instanceof Error ? failure.message : 'A mentés nem sikerült.'));
     } finally {
       setBusy(false);
     }
@@ -1217,9 +1292,9 @@ function MemoryCard({
     setError('');
     try {
       await api.deleteMemory(memory.id, envelope.etag);
-      await onChanged('Töröltük az emléket a memóriatárból.');
+      await onChanged(t('memoryDeleted'));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'A törlés nem sikerült.');
+      setError(t(failure instanceof Error ? failure.message : 'A törlés nem sikerült.'));
     } finally {
       setBusy(false);
       setConfirmDelete(false);
@@ -1235,7 +1310,7 @@ function MemoryCard({
         {editing ? (
           <form className="memory-edit-form" onSubmit={(event) => void save(event)}>
             <label>
-              Kategória
+              {t('Kategória')}
               <input
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
@@ -1244,7 +1319,7 @@ function MemoryCard({
               />
             </label>
             <label>
-              Az emlék szövege
+              {t('Az emlék szövege')}
               <textarea
                 value={content}
                 onChange={(event) => setContent(event.target.value)}
@@ -1254,7 +1329,7 @@ function MemoryCard({
               />
             </label>
             <label>
-              Prioritás
+              {t('Prioritás')}
               <PrioritySelect value={priority} onChange={setPriority} />
             </label>
             {error && (
@@ -1271,10 +1346,10 @@ function MemoryCard({
                   setError('');
                 }}
               >
-                Mégse
+                {t('Mégse')}
               </button>
               <button className="button button-primary button-small" disabled={busy}>
-                {busy ? 'Mentés…' : 'Módosítás mentése'}
+                {busy ? t('Mentés…') : t('Módosítás mentése')}
               </button>
             </div>
           </form>
@@ -1283,13 +1358,13 @@ function MemoryCard({
             <div className="memory-card-meta">
               <span className="category-tag">{memory.category}</span>
               <span className={`priority-tag priority-${memory.priority}`}>
-                {priorityLabel(memory.priority)}
+                {priorityLabel(memory.priority, t)}
               </span>
               <span className="memory-date">
-                Módosítva{' '}
-                {new Intl.DateTimeFormat('hu-HU', { dateStyle: 'medium' }).format(
-                  new Date(memory.updatedAt),
-                )}
+                {t('Módosítva')}{' '}
+                {new Intl.DateTimeFormat(language === 'hu' ? 'hu-HU' : 'en-US', {
+                  dateStyle: 'medium',
+                }).format(new Date(memory.updatedAt))}
               </span>
             </div>
             <p className="memory-content-text">{memory.content}</p>
@@ -1302,19 +1377,19 @@ function MemoryCard({
         )}
         {confirmDelete && !editing && (
           <div className="confirm-delete">
-            <span>Biztosan törlöd ezt az emléket? A törlés végleges.</span>
+            <span>{t('Biztosan törlöd ezt az emléket? A törlés végleges.')}</span>
             <button
               className="button button-quiet button-small"
               onClick={() => setConfirmDelete(false)}
             >
-              Mégse
+              {t('Mégse')}
             </button>
             <button
               className="button button-danger button-small"
               disabled={busy}
               onClick={() => void remove()}
             >
-              {busy ? 'Törlés…' : 'Igen, törlöm'}
+              {busy ? t('Törlés…') : t('Igen, törlöm')}
             </button>
           </div>
         )}
@@ -1323,7 +1398,7 @@ function MemoryCard({
         <div className="memory-actions">
           <button
             className="icon-button"
-            aria-label={`Emlék szerkesztése: ${memory.category}`}
+            aria-label={t('memoryEditLabel', { category: memory.category })}
             onClick={() => {
               setEditing(true);
               setConfirmDelete(false);
@@ -1333,7 +1408,7 @@ function MemoryCard({
           </button>
           <button
             className="icon-button icon-button-danger"
-            aria-label={`Emlék törlése: ${memory.category}`}
+            aria-label={t('memoryDeleteLabel', { category: memory.category })}
             onClick={() => setConfirmDelete(true)}
           >
             <Icon name="trash" size={16} />
@@ -1355,8 +1430,9 @@ function SettingsPanel({
   memoryTotal: number;
   onRefresh: () => void;
 }) {
+  const { t } = useI18n();
   return (
-    <section className="settings-layout" aria-label="Adatvédelmi és modellbeállítások">
+    <section className="settings-layout" aria-label={t('Adatvédelmi és modellbeállítások')}>
       <div className="settings-main">
         <article className="settings-card provider-card">
           <div className="settings-card-heading">
@@ -1364,12 +1440,12 @@ function SettingsPanel({
               <Icon name="spark" size={18} />
             </span>
             <div>
-              <span className="section-kicker">SZOLGÁLTATÓ</span>
-              <h2>A beszélgetésed modellje.</h2>
+              <span className="section-kicker">{t('SZOLGÁLTATÓ')}</span>
+              <h2>{t('A beszélgetésed modellje.')}</h2>
             </div>
             <span className={`config-badge${settings?.configured ? ' config-ready' : ''}`}>
               <span className="status-dot" />
-              {settings?.configured ? 'CSATLAKOZTATVA' : 'BEÁLLÍTÁSRA VÁR'}
+              {settings?.configured ? t('CSATLAKOZTATVA') : t('BEÁLLÍTÁSRA VÁR')}
             </span>
           </div>
           <div className="provider-summary">
@@ -1383,22 +1459,22 @@ function SettingsPanel({
             <div>
               <strong>
                 {loading
-                  ? 'Ellenőrzés…'
+                  ? t('Ellenőrzés…')
                   : settings?.provider === 'ollama'
                     ? 'Ollama'
                     : settings?.provider === 'none'
-                      ? 'Nincs beállítva'
-                      : 'OpenAI-kompatibilis API'}
+                      ? t('Nincs beállítva')
+                      : t('OpenAI-kompatibilis API')}
               </strong>
               <span>
                 {settings?.configured
                   ? settings.model
-                  : 'A memória kezeléséhez nem kell modellt beállítani.'}
+                  : t('A memória kezeléséhez nem kell modellt beállítani.')}
               </span>
             </div>
             <button
               className="icon-button"
-              aria-label="Beállítások frissítése"
+              aria-label={t('Beállítások frissítése')}
               onClick={onRefresh}
             >
               <Icon name="refresh" size={16} />
@@ -1409,8 +1485,8 @@ function SettingsPanel({
               <div className="setup-guide-title">
                 <span className="setup-number">01</span>
                 <div>
-                  <strong>Nyisd meg a .env fájlt</strong>
-                  <span>A projekt gyökérmappájában találod.</span>
+                  <strong>{t('Nyisd meg a .env fájlt')}</strong>
+                  <span>{t('A projekt gyökérmappájában találod.')}</span>
                 </div>
               </div>
               <div className="setup-code">
@@ -1425,9 +1501,10 @@ function SettingsPanel({
               <div className="setup-guide-title second">
                 <span className="setup-number">02</span>
                 <div>
-                  <strong>Indítsd újra az alkalmazást</strong>
+                  <strong>{t('Indítsd újra az alkalmazást')}</strong>
                   <span>
-                    <code>docker compose restart</code> – a kulcs csak a szerveren tárolódik.
+                    <code>docker compose restart</code>
+                    {t(' – a kulcs csak a szerveren tárolódik.')}
                   </span>
                 </div>
               </div>
@@ -1441,13 +1518,14 @@ function SettingsPanel({
               <Icon name="lock" size={18} />
             </span>
             <div>
-              <span className="section-kicker">ADATVÉDELEM</span>
-              <h2>Az emlékeid nálad maradnak.</h2>
+              <span className="section-kicker">{t('ADATVÉDELEM')}</span>
+              <h2>{t('Az emlékeid nálad maradnak.')}</h2>
             </div>
           </div>
           <p>
-            {settings?.externalDataNotice ??
-              'A beállítások betöltése után látod, hová kerül a chat.'}
+            {settings?.externalDataNotice
+              ? t(settings.externalDataNotice)
+              : t('A beállítások betöltése után látod, hová kerül a chat.')}
           </p>
           <div className="privacy-list">
             <div>
@@ -1455,12 +1533,12 @@ function SettingsPanel({
                 <Icon name="check" size={14} />
               </span>
               <div>
-                <strong>Az emlékeid ezen a szerveren tárolódnak.</strong>
-                <span>Újraindításkor sem vesznek el.</span>
+                <strong>{t('Az emlékeid ezen a szerveren tárolódnak.')}</strong>
+                <span>{t('Újraindításkor sem vesznek el.')}</span>
               </div>
               <span className="local-state">
                 <Icon name="dot" size={11} />
-                HELYI
+                {t('HELYI')}
               </span>
             </div>
             <div>
@@ -1468,8 +1546,8 @@ function SettingsPanel({
                 <Icon name="check" size={14} />
               </span>
               <div>
-                <strong>A chatelőzmény csak átmeneti.</strong>
-                <span>Az alkalmazás nem ment chatnaplót a lemezre.</span>
+                <strong>{t('A chatelőzmény csak átmeneti.')}</strong>
+                <span>{t('Az alkalmazás nem ment chatnaplót a lemezre.')}</span>
               </div>
             </div>
             <div>
@@ -1477,8 +1555,8 @@ function SettingsPanel({
                 <Icon name="check" size={14} />
               </span>
               <div>
-                <strong>Az API-kulcs nem kerül a böngészőbe.</strong>
-                <span>Kizárólag a szerver futásidejű beállításából származik.</span>
+                <strong>{t('Az API-kulcs nem kerül a böngészőbe.')}</strong>
+                <span>{t('Kizárólag a szerver futásidejű beállításából származik.')}</span>
               </div>
             </div>
           </div>
@@ -1487,29 +1565,31 @@ function SettingsPanel({
 
       <aside className="settings-aside">
         <article className="settings-card data-card">
-          <span className="section-kicker">A TE SAJÁT ADATAID</span>
+          <span className="section-kicker">{t('A TE SAJÁT ADATAID')}</span>
           <div className="data-stat">
             <span>{memoryTotal.toString().padStart(2, '0')}</span>
             <Icon name="memory" size={22} />
           </div>
-          <strong>elmentett emlék</strong>
-          <span className="data-footnote">JSON-fájlban, saját tárhelyen</span>
+          <strong>{t('elmentett emlék')}</strong>
+          <span className="data-footnote">{t('JSON-fájlban, saját tárhelyen')}</span>
           <div className="data-divider" />
           <div className="data-footnote-line">
             <Icon name="lock" size={13} />
-            Nem osztjuk meg senkivel.
+            {t('Nem osztjuk meg senkivel.')}
           </div>
         </article>
         <article className="settings-card tips-card">
-          <span className="section-kicker">SAJÁT TÁRHELYED</span>
-          <h3>Te adod a kulcsot.</h3>
+          <span className="section-kicker">{t('SAJÁT TÁRHELYED')}</span>
+          <h3>{t('Te adod a kulcsot.')}</h3>
           <p>
-            A memóriafájl a <code>data/memories.json</code> helyen van. Mentsd a teljes
-            adatkönyvtárat, hogy a mentéseid is kézben maradjanak.
+            {t('A memóriafájl a')} <code>data/memories.json</code>
+            {t(
+              ' helyen van. Mentsd a teljes adatkönyvtárat, hogy a mentéseid is kézben maradjanak.',
+            )}
           </p>
           <div className="local-tag">
             <Icon name="dot" size={11} />
-            TE IRÁNYÍTASZ
+            {t('TE IRÁNYÍTASZ')}
           </div>
         </article>
       </aside>

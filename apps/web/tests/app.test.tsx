@@ -17,6 +17,7 @@ describe('Home Memory web interface', () => {
   const fetcher = vi.fn<typeof fetch>();
 
   beforeEach(() => {
+    window.localStorage.clear();
     memories = [];
     configured = false;
     fetcher.mockReset().mockImplementation(async (input, init) => {
@@ -110,16 +111,54 @@ describe('Home Memory web interface', () => {
     vi.stubGlobal('fetch', fetcher);
   });
 
+  async function renderHungarian(): Promise<void> {
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'I remember what matters.' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Interface language' }), {
+      target: { value: 'hu' },
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Emlékszem, ami fontos.' }),
+    ).toBeInTheDocument();
+  }
+
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
   });
 
-  it('creates and lists a memory through the accessible memory form', async () => {
+  it('uses English by default and remembers a Hungarian language choice', async () => {
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'I remember what matters.' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /My memories/u })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(
+      await screen.findByRole('heading', { name: 'On your own storage.' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Your memories stay yours.')).toBeInTheDocument();
+    expect(screen.getByText('You manage your memories locally.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Interface language' }), {
+      target: { value: 'hu' },
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Emlékszem, ami fontos.' }),
+    ).toBeInTheDocument();
+    expect(window.localStorage.getItem('home-memory-language')).toBe('hu');
+
+    cleanup();
     render(<App />);
     expect(
       await screen.findByRole('heading', { name: 'Emlékszem, ami fontos.' }),
     ).toBeInTheDocument();
+  });
+
+  it('creates and lists a memory through the accessible memory form', async () => {
+    await renderHungarian();
     fireEvent.click(screen.getByRole('button', { name: /Emlékeim/u }));
     expect(await screen.findByRole('heading', { name: /Memóriák/u })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Új emlék' }));
@@ -140,7 +179,7 @@ describe('Home Memory web interface', () => {
   });
 
   it('explains that the memory list works while the assistant awaits a provider', async () => {
-    render(<App />);
+    await renderHungarian();
     expect(await screen.findByText('Az asszisztens beállításra vár')).toBeInTheDocument();
     const send = screen.getByRole('button', { name: 'Üzenet küldése' });
     expect(send).toBeDisabled();
@@ -156,8 +195,7 @@ describe('Home Memory web interface', () => {
 
   it('displays stored content as text and supports search', async () => {
     memories = [memory];
-    render(<App />);
-    await screen.findByRole('heading', { name: 'Emlékszem, ami fontos.' });
+    await renderHungarian();
     fireEvent.click(screen.getByRole('button', { name: /Emlékeim/u }));
     expect(await screen.findByText(memory.content)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Keresés az emlékek között'), {
@@ -170,7 +208,7 @@ describe('Home Memory web interface', () => {
 
   it('lets the user edit an automatic memory suggestion before approving it', async () => {
     configured = true;
-    render(<App />);
+    await renderHungarian();
     fireEvent.change(await screen.findByLabelText('Üzenet az asszisztensnek'), {
       target: { value: 'I usually like quiet places when travelling.' },
     });
