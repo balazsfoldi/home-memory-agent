@@ -1,6 +1,6 @@
 {
   "name": "@home-memory/web",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,6 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {},
   "devDependencies": {
     "@home-memory/shared": "*",
     "@vitejs/plugin-react": "^4.7.0",

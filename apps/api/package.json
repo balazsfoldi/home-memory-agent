@@ -1,6 +1,6 @@
 {
   "name": "@home-memory/api",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "type": "module",
   "private": true,
   "scripts": {
@@ -11,10 +11,9 @@
   },
   "dependencies": {
     "@home-memory/shared": "*",
-    "express": "^5.1.0",
     "dotenv": "^16.6.1",
+    "express": "^5.1.0",
     "proper-lockfile": "^4.1.2",
     "zod": "^4.1.8"
-  },
-  "devDependencies": {}
+  }
 }
