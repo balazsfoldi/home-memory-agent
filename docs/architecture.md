@@ -1,6 +1,6 @@
 # Architecture
 
-Home Memory Agent v0.1 is a single-user modular monolith. One Node.js
+Home Memory Agent v0.2.5 is a single-user modular monolith. One Node.js
 process serves the static React application, REST API, and JSON memory
 store. The language model is an outbound provider; it never receives a
 repository handle or performs a storage write.
@@ -27,7 +27,8 @@ apps/web ── same-origin JSON API ── apps/api
 - `apps/api/src/http` maps validated REST requests to the application and
   hides provider errors and secrets.
 - `apps/web` renders the chat, memory list, and a read-only settings page.
-  Its build has no provider credentials.
+  It defaults to English, offers Hungarian translations, and saves the
+  language choice in browser storage. Its build has no provider credentials.
 - `features/` holds API-facing Cucumber acceptance scenarios.
 
 ## Memory storage

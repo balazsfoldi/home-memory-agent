@@ -21,8 +21,8 @@ memories to your preferred LLM when needed.
 
 🚧 Early development / experimental
 
-The project is currently under active development and is not yet
-recommended for production use.
+The current application version is **v0.2.5**. The project is under active
+development and is not yet recommended for production use.
 
 ## Quick start
 
@@ -69,7 +69,9 @@ the memory file before moving or resetting the deployment.
 
 ## What is included
 
-- A Hungarian web interface for chat, browsing memories, editing, and deletion.
+- An English web interface by default, with an optional Hungarian translation
+  for chat, memory management, and settings. The language choice is saved in
+  the browser.
 - A REST API with input validation, duplicate detection, and protection
   against edits based on stale data. It also detects high-confidence lexical
   paraphrases within the same category and asks the user to review them.

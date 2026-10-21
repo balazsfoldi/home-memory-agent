@@ -467,12 +467,13 @@ Teljesítményhez 100, 1000 és 10 000 fiktív emlékkel mérjük a CRUD és a h
 
 ## 16. Következő verziók
 
-| Verzió                 | A v0.1-re épülő munka                                                                                                 | Belépési feltétel                                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| v0.2 – Smart Memory    | Automatikus kivonatolás, prioritás, átfogalmazások deduplikációja, fejlettebb jóváhagyás; szükség esetén tartós chat. | A kézi és explicit javaslatos folyamat megbízható, vannak valós minőségi példák.                                    |
-| v0.3 – Semantic Memory | Elsősorban SQLite-adapter, szükség esetén PostgreSQL; embeddings, szemantikus retrieval, lejárat/archívum.            | Mérés vagy használati tapasztalat mutatja a JSON/lexikai megoldás korlátját; migráció és visszaállítás megtervezve. |
-| v0.4 – Agent Tools     | Engedélyezett eszközregiszter, időjárás/naptár/jegyzet adapterek, műveletenkénti jogosultság.                         | A belső műveletszerződés stabil; a külső mellékhatások kezelése külön definiált.                                    |
-| v0.5 – Automation      | Ütemezett és eseményvezérelt feladatok, ismétlésvédelem, futásállapot, felhasználói értesítés.                        | Tartós feladattár, retry/idempotencia és kézbesítési szabályok rendelkezésre állnak.                                |
+| Verzió                      | A v0.1-re épülő munka                                                                                                 | Belépési feltétel                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| v0.2 – Smart Memory         | Automatikus kivonatolás, prioritás, átfogalmazások deduplikációja, fejlettebb jóváhagyás; szükség esetén tartós chat. | A kézi és explicit javaslatos folyamat megbízható, vannak valós minőségi példák.                                    |
+| v0.2.5 – Interface language | Angol alapértelmezett felület, választható magyar fordítás, helyben megjegyzett nyelvválasztás és lokalizált dátumok. | A fordítás minden felületi szöveget, hozzáférhetőségi címkét és szolgáltatói adatvédelmi tájékoztatót lefed.        |
+| v0.3 – Semantic Memory      | Elsősorban SQLite-adapter, szükség esetén PostgreSQL; embeddings, szemantikus retrieval, lejárat/archívum.            | Mérés vagy használati tapasztalat mutatja a JSON/lexikai megoldás korlátját; migráció és visszaállítás megtervezve. |
+| v0.4 – Agent Tools          | Engedélyezett eszközregiszter, időjárás/naptár/jegyzet adapterek, műveletenkénti jogosultság.                         | A belső műveletszerződés stabil; a külső mellékhatások kezelése külön definiált.                                    |
+| v0.5 – Automation           | Ütemezett és eseményvezérelt feladatok, ismétlésvédelem, futásállapot, felhasználói értesítés.                        | Tartós feladattár, retry/idempotencia és kézbesítési szabályok rendelkezésre állnak.                                |
 
 ## 17. Az első konkrét fejlesztési munkacsomag
 
@@ -498,3 +499,10 @@ Ennek az eredménye egy kicsi, végig működő és tartósan tároló alap, ame
 - A javaslatkártyán látható, hogy explicit kérés vagy automatikus emlékötlet indította-e a javaslatot. A felhasználó mentés előtt átírhatja a kategóriát, tartalmat és prioritást. Elfogadás nélkül nincs írás.
 - A duplikációvédelem az eddigi pontos egyezés mellett azonos kategórián belül nagy bizonyosságú token- és néhány ismert szóváltozat-egyezést keres. Ellentmondó tagadást vagy számértéket tartalmazó tényeket nem tekint automatikusan azonosnak. Ez nem szemantikus keresés; az továbbra is a v0.3 témája.
 - A chat-előzmény továbbra is csak ideiglenes. Tartós beszélgetés-archívum nem szükséges ehhez a verzióhoz.
+
+## v0.2.5 Interface language – megvalósított viselkedés
+
+- A felület angolul indul, a navigációból magyarra váltható.
+- A választást a böngésző helyi tárhelye őrzi meg; a szerver és a memóriafájl nem kap nyelvi beállítást.
+- A látható felületi szövegek, űrlapok, hozzáférhetőségi címkék, hibaüzenetek, szolgáltatói adatvédelmi tájékoztatók és dátumformátumok a kiválasztott nyelvet követik.
+- Az asszisztens válaszainak nyelve továbbra is a felhasználó üzenetétől és a konfigurált modelltől függ.
