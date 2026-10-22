@@ -67,10 +67,15 @@ name rather than `localhost`.
 ## Agent tools
 
 Tools are read-only and disabled by default. Enable only the operations
-you want the assistant to use, then restart the service:
+you want the assistant to use. After editing `.env`, recreate the Compose
+service so Docker loads the new environment:
 
 ```dotenv
 AGENT_TOOLS=weather.getForecast,calendar.getEvents,notes.search
+```
+
+```sh
+docker compose up -d --build
 ```
 
 The supported operations are `weather.getForecast` (sends the requested
