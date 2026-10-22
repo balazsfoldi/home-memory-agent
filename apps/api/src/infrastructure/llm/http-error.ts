@@ -26,6 +26,7 @@ export function classifyFetchFailure(
 
 export async function readSuccessfulJson(
   response: Response,
+  maximumBytes = 1_000_000,
 ): Promise<Record<string, unknown>> {
   if (!response.ok) {
     const kind = response.status === 401 || response.status === 403 ? 'auth' : 'unavailable';
@@ -40,7 +41,7 @@ export async function readSuccessfulJson(
       const part = await reader.read();
       if (part.done) break;
       totalBytes += part.value.byteLength;
-      if (totalBytes > 1_000_000) {
+      if (totalBytes > maximumBytes) {
         await reader.cancel();
         throw new Error('response body exceeds the maximum allowed size');
       }

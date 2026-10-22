@@ -4,6 +4,7 @@ import type { AppConfig } from '../../src/config.js';
 import { OpenAiCompatibleProvider } from '../../src/infrastructure/llm/openai-compatible-provider.js';
 import { OllamaProvider } from '../../src/infrastructure/llm/ollama-provider.js';
 import { LlmUpstreamError } from '../../src/infrastructure/llm/http-error.js';
+import { ConfiguredEmbeddingProvider } from '../../src/infrastructure/embeddings/configured-embedding-provider.js';
 
 function configured(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -11,11 +12,17 @@ function configured(overrides: Partial<AppConfig> = {}): AppConfig {
     port: 3000,
     nodeEnv: 'test',
     dataPath: './data',
+    storeProvider: 'sqlite',
     provider: 'openai-compatible',
     baseUrl: 'https://llm.example/v1',
     apiKey: 'private-test-key',
     model: 'fixture',
     llmTimeoutMs: 1_000,
+    embeddingProvider: 'none',
+    embeddingBaseUrl: '',
+    embeddingApiKey: '',
+    embeddingModel: '',
+    embeddingTimeoutMs: 1_000,
     openaiStructuredOutput: true,
     ...overrides,
   };
@@ -86,5 +93,76 @@ describe('LLM provider adapters', () => {
       loadConfig({ LLM_BASE_URL: 'file:///etc/passwd', LLM_API_KEY: 'super-secret' }),
     ).toThrow(/LLM_BASE_URL/u);
     expect(() => loadConfig({ PORT: '70000', LLM_API_KEY: 'super-secret' })).toThrow(/PORT/u);
+  });
+
+  it('defaults to a local SQLite store and validates the embedding endpoint', () => {
+    const config = loadConfig({
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'nomic-embed-text',
+      LLM_BASE_URL: 'http://ollama:11434',
+    });
+    expect(config.storeProvider).toBe('sqlite');
+    expect(config.embeddingBaseUrl).toBe('http://ollama:11434');
+    expect(() =>
+      loadConfig({
+        EMBEDDING_BASE_URL: 'file:///tmp/data',
+        EMBEDDING_PROVIDER: 'ollama',
+        EMBEDDING_MODEL: 'nomic-embed-text',
+      }),
+    ).toThrow(/EMBEDDING_BASE_URL/u);
+  });
+});
+
+describe('embedding provider adapter', () => {
+  it('parses OpenAI-compatible vectors in input order', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { index: 1, embedding: [0, 1] },
+            { index: 0, embedding: [1, 0] },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const provider = new ConfiguredEmbeddingProvider(
+      configured({
+        embeddingProvider: 'openai-compatible',
+        embeddingBaseUrl: 'https://embed.example/v1',
+        embeddingApiKey: 'embedding-test-key',
+        embeddingModel: 'fixture-embedding',
+      }),
+      fetcher,
+    );
+
+    await expect(provider.embed(['first', 'second'])).resolves.toEqual([
+      [1, 0],
+      [0, 1],
+    ]);
+    expect(fetcher.mock.calls[0]?.[0]).toBe('https://embed.example/v1/embeddings');
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('authorization')).toBe(
+      'Bearer embedding-test-key',
+    );
+  });
+
+  it('uses Ollama /api/embed without an authorization header', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ embeddings: [[0.5, 0.5]] }), { status: 200 }),
+      );
+    const provider = new ConfiguredEmbeddingProvider(
+      configured({
+        embeddingProvider: 'ollama',
+        embeddingBaseUrl: 'http://ollama:11434',
+        embeddingModel: 'nomic-embed-text',
+      }),
+      fetcher,
+    );
+
+    await expect(provider.embed(['a memory'])).resolves.toEqual([[0.5, 0.5]]);
+    expect(fetcher.mock.calls[0]?.[0]).toBe('http://ollama:11434/api/embed');
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).has('authorization')).toBe(false);
   });
 });

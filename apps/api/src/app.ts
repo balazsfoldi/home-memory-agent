@@ -1,23 +1,34 @@
 import { resolve } from 'node:path';
 import type { AppConfig } from './config.js';
-import { hasConfiguredProvider } from './config.js';
+import { hasConfiguredEmbeddingProvider, hasConfiguredProvider } from './config.js';
 import type { MemoryRepository } from './domain/memory-repository.js';
 import type { LlmProvider } from './domain/llm-provider.js';
 import { createMemoryApplicationServices } from './application/repository-memory-service.js';
 import { JsonMemoryRepository } from './infrastructure/persistence/json-memory-repository.js';
+import { SqliteMemoryRepository } from './infrastructure/persistence/sqlite-memory-repository.js';
 import { OllamaProvider } from './infrastructure/llm/ollama-provider.js';
 import { OpenAiCompatibleProvider } from './infrastructure/llm/openai-compatible-provider.js';
+import { ConfiguredEmbeddingProvider } from './infrastructure/embeddings/configured-embedding-provider.js';
 import { createApplication } from './http/application.js';
 
 export async function createRuntime(config: AppConfig, repository?: MemoryRepository) {
-  const memoryRepository = repository ?? new JsonMemoryRepository(resolve(config.dataPath));
+  const memoryRepository =
+    repository ??
+    (config.storeProvider === 'sqlite'
+      ? new SqliteMemoryRepository(resolve(config.dataPath))
+      : new JsonMemoryRepository(resolve(config.dataPath)));
   await memoryRepository.initialize();
   let provider: LlmProvider | undefined;
   if (config.provider === 'openai-compatible') provider = new OpenAiCompatibleProvider(config);
   if (config.provider === 'ollama') provider = new OllamaProvider(config);
+  const embeddingConfigured = hasConfiguredEmbeddingProvider(config);
+  const embeddingProvider = embeddingConfigured
+    ? new ConfiguredEmbeddingProvider(config)
+    : undefined;
   const services = createMemoryApplicationServices({
     repository: memoryRepository,
     ...(provider ? { provider } : {}),
+    ...(embeddingProvider ? { embeddingProvider } : {}),
     providerConfigured: hasConfiguredProvider(config),
     model: config.model,
   });

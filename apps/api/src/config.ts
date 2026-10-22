@@ -12,11 +12,17 @@ const environmentSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATA_PATH: z.string().trim().min(1).default('./data'),
+  MEMORY_STORE: z.enum(['sqlite', 'json']).default('sqlite'),
   LLM_PROVIDER: z.enum(['none', 'openai-compatible', 'ollama']).default('none'),
   LLM_BASE_URL: z.string().trim().default(''),
   LLM_API_KEY: z.string().default(''),
   LLM_MODEL: z.string().trim().default(''),
   LLM_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(60_000),
+  EMBEDDING_PROVIDER: z.enum(['none', 'openai-compatible', 'ollama']).default('none'),
+  EMBEDDING_BASE_URL: z.string().trim().default(''),
+  EMBEDDING_API_KEY: z.string().default(''),
+  EMBEDDING_MODEL: z.string().trim().default(''),
+  EMBEDDING_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
   OPENAI_STRUCTURED_OUTPUT: booleanString,
 });
 
@@ -27,11 +33,17 @@ export interface AppConfig {
   port: number;
   nodeEnv: 'development' | 'test' | 'production';
   dataPath: string;
+  storeProvider: 'sqlite' | 'json';
   provider: 'none' | 'openai-compatible' | 'ollama';
   baseUrl: string;
   apiKey: string;
   model: string;
   llmTimeoutMs: number;
+  embeddingProvider: 'none' | 'openai-compatible' | 'ollama';
+  embeddingBaseUrl: string;
+  embeddingApiKey: string;
+  embeddingModel: string;
+  embeddingTimeoutMs: number;
   openaiStructuredOutput: boolean;
 }
 
@@ -44,10 +56,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error(`Invalid server configuration in: ${invalidNames.join(', ')}`);
   }
   const value = parsed.data;
-  let baseUrl = '';
-  if (value.LLM_BASE_URL) {
+  const parseBaseUrl = (name: string, input: string): string => {
+    if (!input) return '';
     try {
-      const url = new URL(value.LLM_BASE_URL);
+      const url = new URL(input);
       if (
         !['http:', 'https:'].includes(url.protocol) ||
         url.username ||
@@ -56,25 +68,44 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       ) {
         throw new Error('invalid url');
       }
-      baseUrl = url.toString().replace(/\/+$/u, '');
+      return url.toString().replace(/\/+$/u, '');
     } catch {
-      throw new Error(
-        'LLM_BASE_URL must be an HTTP or HTTPS URL without embedded credentials.',
-      );
+      throw new Error(`${name} must be an HTTP or HTTPS URL without embedded credentials.`);
     }
-  }
+  };
+  const baseUrl = parseBaseUrl('LLM_BASE_URL', value.LLM_BASE_URL);
+  const embeddingBaseUrl = parseBaseUrl(
+    'EMBEDDING_BASE_URL',
+    value.EMBEDDING_BASE_URL || value.LLM_BASE_URL,
+  );
   return {
     host: value.HOST,
     port: value.PORT,
     nodeEnv: value.NODE_ENV,
     dataPath: resolve(projectRoot, value.DATA_PATH),
+    storeProvider: value.MEMORY_STORE,
     provider: value.LLM_PROVIDER,
     baseUrl,
     apiKey: value.LLM_API_KEY,
     model: value.LLM_MODEL,
     llmTimeoutMs: value.LLM_TIMEOUT_MS,
+    embeddingProvider: value.EMBEDDING_PROVIDER,
+    embeddingBaseUrl,
+    embeddingApiKey: value.EMBEDDING_API_KEY || value.LLM_API_KEY,
+    embeddingModel: value.EMBEDDING_MODEL,
+    embeddingTimeoutMs: value.EMBEDDING_TIMEOUT_MS,
     openaiStructuredOutput: value.OPENAI_STRUCTURED_OUTPUT,
   };
+}
+
+export function hasConfiguredEmbeddingProvider(config: AppConfig): boolean {
+  if (
+    !config.embeddingModel ||
+    config.embeddingProvider === 'none' ||
+    !config.embeddingBaseUrl
+  )
+    return false;
+  return config.embeddingProvider !== 'openai-compatible' || Boolean(config.embeddingApiKey);
 }
 
 export function hasConfiguredProvider(config: AppConfig): boolean {

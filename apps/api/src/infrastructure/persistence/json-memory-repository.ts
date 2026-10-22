@@ -10,9 +10,14 @@ import {
   StoreCorruptError,
 } from '../../domain/errors.js';
 import type { MemoryRepository, MemoryTransaction } from '../../domain/memory-repository.js';
+import { memoryContentFingerprint } from '../../domain/memory-fingerprint.js';
 
 export class JsonMemoryRepository implements MemoryRepository {
   private snapshot: Memory[] = [];
+  private embeddings = new Map<
+    string,
+    { vector: number[]; sourceCategory: string; sourceHash: string; embeddingKey: string }
+  >();
   private readonly mutex = new AsyncMutex();
   private releaseProcessLock: (() => Promise<void>) | undefined;
   private initialized = false;
@@ -65,6 +70,7 @@ export class JsonMemoryRepository implements MemoryRepository {
     const release = this.releaseProcessLock;
     this.releaseProcessLock = undefined;
     this.initialized = false;
+    this.embeddings.clear();
     if (release) await release();
   }
 
@@ -77,6 +83,44 @@ export class JsonMemoryRepository implements MemoryRepository {
     this.assertReady();
     const memory = this.snapshot.find((item) => item.id === id);
     return memory ? { ...memory } : null;
+  }
+
+  async listEmbeddings(): Promise<
+    Array<{
+      memoryId: string;
+      vector: number[];
+      sourceCategory: string;
+      sourceHash: string;
+      embeddingKey: string;
+    }>
+  > {
+    this.assertReady();
+    return [...this.embeddings.entries()].map(([memoryId, entry]) => ({
+      memoryId,
+      vector: [...entry.vector],
+      sourceCategory: entry.sourceCategory,
+      sourceHash: entry.sourceHash,
+      embeddingKey: entry.embeddingKey,
+    }));
+  }
+
+  async saveEmbedding(
+    memoryId: string,
+    vector: number[],
+    source: { category: string; content: string },
+    embeddingKey: string,
+  ): Promise<void> {
+    this.assertReady();
+    const current = this.snapshot.find((memory) => memory.id === memoryId);
+    if (!current || current.category !== source.category || current.content !== source.content)
+      return;
+    if (!vector.length || vector.some((value) => !Number.isFinite(value))) return;
+    this.embeddings.set(memoryId, {
+      vector: [...vector],
+      sourceCategory: source.category,
+      sourceHash: memoryContentFingerprint(source.category, source.content),
+      embeddingKey,
+    });
   }
 
   async transaction<T>(
@@ -119,8 +163,19 @@ export class JsonMemoryRepository implements MemoryRepository {
 
       const result = await operation(transaction);
       if (!dirty) return result;
+      const previous = this.snapshot;
       await this.writeAtomically(draft);
       this.snapshot = draft.map((memory) => ({ ...memory }));
+      const nextIds = new Set(draft.map((memory) => memory.id));
+      for (const memory of previous) {
+        const updated = draft.find((item) => item.id === memory.id);
+        if (
+          !nextIds.has(memory.id) ||
+          (updated &&
+            (updated.content !== memory.content || updated.category !== memory.category))
+        )
+          this.embeddings.delete(memory.id);
+      }
       return result;
     });
   }

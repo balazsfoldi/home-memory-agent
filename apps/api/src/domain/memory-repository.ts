@@ -14,6 +14,21 @@ export interface MemoryRepository {
   close(): Promise<void>;
   list(): Promise<Memory[]>;
   findById(id: string): Promise<Memory | null>;
+  listEmbeddings(): Promise<
+    Array<{
+      memoryId: string;
+      vector: number[];
+      sourceCategory: string;
+      sourceHash: string;
+      embeddingKey: string;
+    }>
+  >;
+  saveEmbedding(
+    memoryId: string,
+    vector: number[],
+    source: { category: string; content: string },
+    embeddingKey: string,
+  ): Promise<void>;
   transaction<T>(operation: (transaction: MemoryTransaction) => Promise<T> | T): Promise<T>;
 }
 

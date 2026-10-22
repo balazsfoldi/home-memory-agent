@@ -27,6 +27,8 @@ function memory(id: string, content: string) {
     priority: 'normal' as const,
     createdAt: '2026-10-21T18:00:00.000Z',
     updatedAt: '2026-10-21T18:00:00.000Z',
+    expiresAt: null,
+    archivedAt: null,
   };
 }
 

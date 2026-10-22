@@ -44,6 +44,7 @@ export async function createTestRuntime(
   const config = loadConfig({
     NODE_ENV: 'test',
     DATA_PATH: dataDirectory,
+    MEMORY_STORE: 'json',
     LLM_PROVIDER: options.provider === false ? 'none' : 'openai-compatible',
     LLM_BASE_URL: options.provider === false ? '' : 'https://example.invalid/v1',
     LLM_API_KEY: options.provider === false ? '' : 'test-only-key',
