@@ -1,16 +1,19 @@
 # Architecture
 
-Home Memory Agent v0.2.5 is a single-user modular monolith. One Node.js
-process serves the static React application, REST API, and JSON memory
-store. The language model is an outbound provider; it never receives a
-repository handle or performs a storage write.
+Home Memory Agent v0.3.0 is a single-user modular monolith. One Node.js
+process serves the static React application, REST API, and local SQLite
+memory store. Configured language and embedding models are outbound
+providers; neither receives a repository handle or performs a storage write.
 
 ```text
 apps/web ── same-origin JSON API ── apps/api
-                                         ├── MemoryService ── JsonMemoryRepository
+                                         ├── MemoryService ── SqliteMemoryRepository
                                          └── ChatService ── MemoryRetriever
                                                             ├── OpenAI-compatible adapter
                                                             └── Ollama adapter
+                                         └── MemorySearchService
+                                             ├── local lexical ranking
+                                             └── configured embedding adapter
 ```
 
 ## Packages
@@ -22,8 +25,8 @@ apps/web ── same-origin JSON API ── apps/api
   provider contracts.
 - `apps/api/src/application` applies business rules and coordinates
   services. It does not know about Express or HTTP requests.
-- `apps/api/src/infrastructure` implements JSON persistence and the LLM
-  adapters.
+- `apps/api/src/infrastructure` implements SQLite and JSON persistence,
+  LLM adapters, and embedding adapters.
 - `apps/api/src/http` maps validated REST requests to the application and
   hides provider errors and secrets.
 - `apps/web` renders the chat, memory list, and a read-only settings page.
@@ -33,33 +36,38 @@ apps/web ── same-origin JSON API ── apps/api
 
 ## Memory storage
 
-`MemoryRepository` accepts whole transactions. JSON writes serialize the
-read, validation, duplicate check, and write under one asynchronous
-mutex. At process startup, `proper-lockfile` reserves the data directory
-to stop another app instance from using the same store. A write creates
-and syncs a mode-0600 temporary file in that directory, atomically
-renames it into place, syncs the directory where supported, and updates
-the in-memory read snapshot only after a successful commit. If a commit
-has an uncertain result, the API stops serving data until it recovers.
+`MemoryRepository` accepts whole transactions. SQLite is the default and
+stores memories, expiry/archive timestamps, schema metadata, and float32
+embedding vectors in `memories.sqlite`. Transactions use
+`BEGIN IMMEDIATE`, foreign keys, WAL journaling, and full synchronous
+commits. Updating a memory's category or text invalidates its vector.
+At process startup, `proper-lockfile` reserves the data directory so a
+second app instance cannot open the same store.
 
-A malformed existing `memories.json` is preserved and prevents startup;
-it is never replaced by an empty list. A missing store is initialized as
-an empty JSON array. JSON contains only the memory fields in the
-specification. Chat histories and model proposals live in process memory
-only.
-
+On first startup, the SQLite adapter validates and imports an existing
+`memories.json` in one transaction. It keeps the original file unchanged
+as a recovery copy and records that the import completed. Invalid JSON is
+preserved and prevents startup; it is never replaced with an empty store.
+The optional JSON adapter remains available with `MEMORY_STORE=json`.
 The supported storage arrangement is one process, one local writable
-data directory, and no shared-network folder or second replica. The
-repository contract can later be implemented by SQLite without changing
-the HTTP or chat domain.
+data directory, and no shared-network folder or second replica.
+
+Memories may have an expiry timestamp and may be archived or restored.
+The default list and chat context include only non-archived, unexpired
+memories. Archived and expired items remain available in their filtered
+views until explicitly deleted. Chat histories and model proposals stay
+in process memory only.
 
 ## Chat and write approval
 
-Each chat request searches memories locally using normalized category
-and content tokens. The request sent to a configured provider contains a
-bounded conversation history and no more than five matching memories,
-with a 6,000-character memory-context limit. The user may see which
-memory IDs the assistant request included.
+Each chat request searches locally using normalized category and content
+tokens. When an embedding provider is configured, the search also ranks
+indexed memories by cosine similarity and uses lexical ranking as a
+fallback. Missing vectors are generated in bounded batches and saved
+locally. The chat provider receives a bounded conversation history and
+no more than five matching, active memories, with a 6,000-character
+memory-context limit. The user may see which memory IDs the request
+included.
 
 The provider returns a JSON `answer`, `clarification`, or one
 `CREATE_MEMORY`, `UPDATE_MEMORY`, or `DELETE_MEMORY` proposal. The API
@@ -82,6 +90,12 @@ content. Provider-specific URLs, HTTP bodies, authorization, response
 parsing, and timeouts stay inside their adapters. Test suites inject a
 deterministic fake. They never send fixtures to a real or paid provider.
 
+`EmbeddingProvider.embed` accepts bounded batches of text and returns
+finite vectors. The OpenAI-compatible adapter uses `/embeddings`; the
+Ollama adapter uses `/api/embed`. Embedding configuration is separate
+from chat configuration. If it is absent or unavailable, memory search
+continues with the local lexical retriever.
+
 The OpenAI-compatible adapter posts non-streaming chat-completion
 requests. Set `OPENAI_STRUCTURED_OUTPUT=true` only when the endpoint
 supports JSON response mode. The Ollama adapter uses its `/api/chat`
@@ -95,3 +109,11 @@ browser writes, limits JSON request size and chat rates, validates every
 input, redacts log content, and binds to `127.0.0.1` by default. Compose
 exposes the app only on host localhost. The operator must add
 authentication and TLS before enabling remote access.
+
+The chat provider receives selected memories, short temporary chat
+history, and the current message. If semantic search is enabled, the
+embedding endpoint receives search queries and saved memory text to build
+the local index; the settings page discloses this. With
+`LLM_PROVIDER=none`, the API and memory UI still work. An Ollama instance
+in another container should be addressed by its Docker network name;
+`localhost` inside Home Memory Agent refers to that container itself.

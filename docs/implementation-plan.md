@@ -506,3 +506,11 @@ Ennek az eredménye egy kicsi, végig működő és tartósan tároló alap, ame
 - A választást a böngésző helyi tárhelye őrzi meg; a szerver és a memóriafájl nem kap nyelvi beállítást.
 - A látható felületi szövegek, űrlapok, hozzáférhetőségi címkék, hibaüzenetek, szolgáltatói adatvédelmi tájékoztatók és dátumformátumok a kiválasztott nyelvet követik.
 - Az asszisztens válaszainak nyelve továbbra is a felhasználó üzenetétől és a konfigurált modelltől függ.
+
+## v0.3 Semantic Memory – megvalósított viselkedés
+
+- A SQLite az alapértelmezett tartós tár. A meglévő `memories.json` induláskor, validálás után, egyszeri tranzakcióban importálódik; az eredeti JSON fájl érintetlenül megmarad visszaállítási példánynak. A `MEMORY_STORE=json` kompatibilitási mód továbbra is választható.
+- A memória lejárati dátumot kaphat, illetve archiválható és visszaállítható. Az alaplistában és a chat kontextusában csak az aktív, nem lejárt emlékek szerepelnek; az archivált és lejárt rekordok külön nézetben megmaradnak.
+- Ollama `/api/embed` és OpenAI-kompatibilis `/embeddings` szolgáltatóval helyi SQLite vektortár épül. A cosine-hasonlóság rangsorol, a lexikai keresés pedig akkor is működik, ha az embedding nincs beállítva vagy nem érhető el.
+- A szemantikus keresés a keresőkifejezést és a mentett emlékek szövegét a konfigurált embedding végpontnak küldi. A beállítások ezt külön jelzik; a vektorok az alkalmazás saját adatkönyvtárában maradnak.
+- A memória módosítása érvényteleníti a korábbi embeddinget. SQLite tranzakciók, JSON-import, archiválás/lejárat és szemantikus rangsorolás regressziós tesztekkel védett.
