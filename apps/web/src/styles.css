@@ -1442,6 +1442,51 @@ button:disabled {
   display: grid;
   gap: 3px;
 }
+.privacy-list > .agent-tools-status {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 0 27px;
+  border-top: 1px solid #efefeb;
+}
+.agent-tools-status > div {
+  display: grid;
+  gap: 3px;
+}
+.agent-tools-status ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-tools-status li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #77796f;
+  font-size: 8px;
+}
+.agent-tools-status li > div {
+  display: grid;
+  gap: 2px;
+}
+.agent-tools-status small {
+  color: #909188;
+  font-size: 7px;
+  line-height: 1.5;
+}
+.agent-tools-status .tool-enabled,
+.agent-tools-status .tool-disabled {
+  flex: 0 0 auto;
+  font-size: 7px;
+}
+.agent-tools-status .tool-enabled {
+  color: #56845e;
+}
+.agent-tools-status .tool-disabled {
+  color: #a29f95;
+}
 .privacy-list strong {
   color: #5b5d52;
   font-size: 8px;

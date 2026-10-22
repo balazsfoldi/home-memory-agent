@@ -4,6 +4,14 @@ export const MEMORY_CATEGORY_MAX_LENGTH = 80;
 export const MEMORY_CONTENT_MAX_LENGTH = 2_000;
 export const CHAT_MESSAGE_MAX_LENGTH = 8_000;
 
+export const AGENT_TOOL_NAMES = [
+  'weather.getForecast',
+  'calendar.getEvents',
+  'notes.search',
+] as const;
+export const agentToolNameSchema = z.enum(AGENT_TOOL_NAMES);
+export type AgentToolName = z.infer<typeof agentToolNameSchema>;
+
 export const memoryPrioritySchema = z.enum(['low', 'normal', 'high']);
 export type MemoryPriority = z.infer<typeof memoryPrioritySchema>;
 
@@ -82,6 +90,13 @@ export const agentDecisionSchema = z.discriminatedUnion('kind', [
     .object({ kind: z.literal('clarification'), message: z.string().min(1).max(2_000) })
     .strict(),
   z.object({ kind: z.literal('proposal'), action: memoryActionSchema }).strict(),
+  z
+    .object({
+      kind: z.literal('tool_call'),
+      name: agentToolNameSchema,
+      input: z.record(z.string(), z.unknown()),
+    })
+    .strict(),
 ]);
 
 export type AgentDecision = z.infer<typeof agentDecisionSchema>;
@@ -99,6 +114,7 @@ export const chatResponseSchema = z
         source: z.enum(['explicit', 'automatic']).default('explicit'),
       })
       .nullable(),
+    toolsUsed: z.array(agentToolNameSchema).default([]),
     memoryContextChanged: z.boolean().optional(),
   })
   .strict();
@@ -144,6 +160,9 @@ export const settingsResponseSchema = z
     embeddingConfigured: z.boolean(),
     storageProvider: z.enum(['sqlite', 'json']),
     semanticSearch: z.boolean(),
+    agentTools: z.array(
+      z.object({ name: agentToolNameSchema, enabled: z.boolean() }).strict(),
+    ),
   })
   .strict();
 

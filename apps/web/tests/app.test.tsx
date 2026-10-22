@@ -16,12 +16,14 @@ const memory = {
 describe('Home Memory web interface', () => {
   let memories: (typeof memory)[];
   let configured: boolean;
+  let reportedTools: string[];
   const fetcher = vi.fn<typeof fetch>();
 
   beforeEach(() => {
     window.localStorage.clear();
     memories = [];
     configured = false;
+    reportedTools = [];
     fetcher.mockReset().mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === '/api/settings') {
@@ -37,6 +39,11 @@ describe('Home Memory web interface', () => {
             embeddingConfigured: false,
             storageProvider: 'sqlite',
             semanticSearch: false,
+            agentTools: [
+              { name: 'weather.getForecast', enabled: false },
+              { name: 'calendar.getEvents', enabled: false },
+              { name: 'notes.search', enabled: false },
+            ],
           }),
           { status: 200 },
         );
@@ -95,6 +102,7 @@ describe('Home Memory web interface', () => {
             message: 'Ezt szívesen megjegyzem.',
             conversationId: 'conversation-123456',
             usedMemoryIds: [],
+            toolsUsed: reportedTools,
             proposal: {
               action: {
                 action: 'CREATE_MEMORY',
@@ -170,6 +178,33 @@ describe('Home Memory web interface', () => {
     expect(
       await screen.findByRole('heading', { name: 'Emlékszem, ami fontos.' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows each agent operation permission and its data source in settings', async () => {
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'I remember what matters.' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('Agent tool permissions')).toBeInTheDocument();
+    expect(screen.getByText('Weather forecast')).toBeInTheDocument();
+    expect(screen.getByText('Calendar events')).toBeInTheDocument();
+    expect(screen.getByText('Search memories')).toBeInTheDocument();
+    expect(screen.getAllByText('Disabled')).toHaveLength(3);
+    expect(
+      screen.getByText('Calendar events are read from the local data/calendar.ics file.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the tools used alongside the assistant reply in Hungarian', async () => {
+    configured = true;
+    reportedTools = ['notes.search'];
+    await renderHungarian();
+    fireEvent.change(await screen.findByLabelText('Üzenet az asszisztensnek'), {
+      target: { value: 'What do I prefer?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Üzenet küldése' }));
+    expect(await screen.findByText('Használt eszközök: Emlékek keresése')).toBeInTheDocument();
   });
 
   it('creates and lists a memory through the accessible memory form', async () => {

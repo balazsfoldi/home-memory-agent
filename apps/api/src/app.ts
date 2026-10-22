@@ -29,6 +29,8 @@ export async function createRuntime(config: AppConfig, repository?: MemoryReposi
     repository: memoryRepository,
     ...(provider ? { provider } : {}),
     ...(embeddingProvider ? { embeddingProvider } : {}),
+    agentTools: config.agentTools,
+    dataDirectory: config.dataPath,
     providerConfigured: hasConfiguredProvider(config),
     model: config.model,
   });

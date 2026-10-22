@@ -9,6 +9,7 @@ import express, {
   type Response,
 } from 'express';
 import {
+  AGENT_TOOL_NAMES,
   chatRequestSchema,
   createMemoryInputSchema,
   updateMemoryInputSchema,
@@ -202,6 +203,10 @@ export function createApplication(
       embeddingConfigured,
       storageProvider: config.storeProvider,
       semanticSearch: embeddingConfigured,
+      agentTools: AGENT_TOOL_NAMES.map((name) => ({
+        name,
+        enabled: config.agentTools.includes(name),
+      })),
     });
   });
 

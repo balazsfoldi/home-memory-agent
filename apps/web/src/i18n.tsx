@@ -100,6 +100,21 @@ const english: Record<string, string> = {
   Te: 'You',
   '1 emléket vettem figyelembe': 'Used 1 memory',
   usedMemories: 'Used {count} memories',
+  toolsUsed: 'Used tools: {tools}',
+  'weather.getForecast': 'Weather forecast',
+  'calendar.getEvents': 'Calendar events',
+  'notes.search': 'Search memories',
+  'Engedélyezett eszközműveletek': 'Agent tool permissions',
+  'Az eszközök külön-külön kapcsolhatók be az AGENT_TOOLS beállítással.':
+    'Each operation can be enabled separately with AGENT_TOOLS.',
+  Bekapcsolva: 'Enabled',
+  Kikapcsolva: 'Disabled',
+  'Naptári események a helyi data/calendar.ics fájlból olvasódnak.':
+    'Calendar events are read from the local data/calendar.ics file.',
+  'Az eszközök találatai bekerülnek a beállított chatmodell kérésébe.':
+    'Tool results are included in requests to the configured chat model.',
+  'A megadott helyet az Open-Meteo kapja meg.':
+    'The location you provide is sent to Open-Meteo.',
   'A chathez nincs beállítva nyelvi modell. A memóriáid továbbra is kezelhetők.':
     'No language model is configured for chat. You can still manage your memories.',
   'Üzenet az asszisztensnek': 'Message your assistant',
@@ -300,6 +315,10 @@ const english: Record<string, string> = {
 };
 
 const hungarian: Record<string, string> = {
+  toolsUsed: 'Használt eszközök: {tools}',
+  'weather.getForecast': 'Időjárás-előrejelzés',
+  'calendar.getEvents': 'Naptári események',
+  'notes.search': 'Emlékek keresése',
   memorySaved: '„{category}” kategóriában elmentettük az emléket.',
   memoryUpdated: 'Frissítettük a „{category}” kategóriájú emléket.',
   memoryDeleted: 'Töröltük az emléket a memóriatárból.',

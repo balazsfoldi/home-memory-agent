@@ -23,12 +23,25 @@ function configured(overrides: Partial<AppConfig> = {}): AppConfig {
     embeddingApiKey: '',
     embeddingModel: '',
     embeddingTimeoutMs: 1_000,
+    agentTools: [],
     openaiStructuredOutput: true,
     ...overrides,
   };
 }
 
 describe('LLM provider adapters', () => {
+  it('validates operation-level agent tool permissions from configuration', () => {
+    expect(loadConfig({ AGENT_TOOLS: 'notes.search, calendar.getEvents' }).agentTools).toEqual(
+      ['notes.search', 'calendar.getEvents'],
+    );
+    expect(() => loadConfig({ AGENT_TOOLS: 'notes.search,unknown.write' })).toThrow(
+      'AGENT_TOOLS',
+    );
+    expect(() => loadConfig({ AGENT_TOOLS: 'notes.search,notes.search' })).toThrow(
+      'AGENT_TOOLS',
+    );
+  });
+
   it('sends a structured, non-streaming OpenAI-compatible request and maps the response', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(

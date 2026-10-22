@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { agentToolNameSchema, type AgentToolName } from '@home-memory/shared';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +24,7 @@ const environmentSchema = z.object({
   EMBEDDING_API_KEY: z.string().default(''),
   EMBEDDING_MODEL: z.string().trim().default(''),
   EMBEDDING_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  AGENT_TOOLS: z.string().default(''),
   OPENAI_STRUCTURED_OUTPUT: booleanString,
 });
 
@@ -44,6 +46,7 @@ export interface AppConfig {
   embeddingApiKey: string;
   embeddingModel: string;
   embeddingTimeoutMs: number;
+  agentTools: AgentToolName[];
   openaiStructuredOutput: boolean;
 }
 
@@ -56,6 +59,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error(`Invalid server configuration in: ${invalidNames.join(', ')}`);
   }
   const value = parsed.data;
+  const configuredTools = value.AGENT_TOOLS.trim()
+    ? value.AGENT_TOOLS.split(',').map((name) => name.trim())
+    : [];
+  const toolNames = z.array(agentToolNameSchema).safeParse(configuredTools);
+  if (!toolNames.success || new Set(configuredTools).size !== configuredTools.length) {
+    throw new Error('Invalid server configuration in: AGENT_TOOLS');
+  }
   const parseBaseUrl = (name: string, input: string): string => {
     if (!input) return '';
     try {
@@ -94,6 +104,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     embeddingApiKey: value.EMBEDDING_API_KEY || value.LLM_API_KEY,
     embeddingModel: value.EMBEDDING_MODEL,
     embeddingTimeoutMs: value.EMBEDDING_TIMEOUT_MS,
+    agentTools: toolNames.data,
     openaiStructuredOutput: value.OPENAI_STRUCTURED_OUTPUT,
   };
 }

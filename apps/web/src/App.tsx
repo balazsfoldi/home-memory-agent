@@ -26,6 +26,7 @@ type ChatEntry = {
   message: string;
   proposal?: NonNullable<Awaited<ReturnType<typeof api.chat>>['proposal']>;
   usedMemoryIds?: string[];
+  toolsUsed?: SettingsResponse['agentTools'][number]['name'][];
   pending?: boolean;
   result?: 'accepted' | 'dismissed';
 };
@@ -388,6 +389,7 @@ function AppContent() {
           message: result.message,
           ...(result.proposal ? { proposal: result.proposal } : {}),
           ...(result.usedMemoryIds.length ? { usedMemoryIds: result.usedMemoryIds } : {}),
+          ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {}),
         },
       ]);
     } catch (failure) {
@@ -602,7 +604,7 @@ function AppContent() {
         <div className="sidebar-footer">
           <span className="footer-avatar">H</span>
           <span>Home Memory Agent</span>
-          <span className="version-tag">v0.3</span>
+          <span className="version-tag">v0.4</span>
         </div>
       </aside>
 
@@ -934,6 +936,14 @@ function ChatPanel(props: {
                     {entry.usedMemoryIds.length === 1
                       ? t('1 emléket vettem figyelembe')
                       : t('usedMemories', { count: entry.usedMemoryIds.length })}
+                  </span>
+                )}
+                {entry.toolsUsed && entry.toolsUsed.length > 0 && (
+                  <span className="used-memories">
+                    <Icon name="spark" size={13} />
+                    {t('toolsUsed', {
+                      tools: entry.toolsUsed.map((name) => t(name)).join(', '),
+                    })}
                   </span>
                 )}
                 {entry.proposal && (
@@ -1672,6 +1682,37 @@ function SettingsPanel({
                     : t('Ollama vagy OpenAI-kompatibilis embedding szolgáltató állítható be.')}
                 </span>
               </div>
+            </div>
+            <div className="agent-tools-status">
+              <div>
+                <strong>{t('Engedélyezett eszközműveletek')}</strong>
+                <span>
+                  {t('Az eszközök külön-külön kapcsolhatók be az AGENT_TOOLS beállítással.')}
+                </span>
+              </div>
+              <ul>
+                {(settings?.agentTools ?? []).map(({ name, enabled }) => (
+                  <li key={name}>
+                    <div>
+                      <span>{t(name)}</span>
+                      {enabled && name === 'weather.getForecast' && (
+                        <small>{t('A megadott helyet az Open-Meteo kapja meg.')}</small>
+                      )}
+                    </div>
+                    <strong className={enabled ? 'tool-enabled' : 'tool-disabled'}>
+                      {t(enabled ? 'Bekapcsolva' : 'Kikapcsolva')}
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+              <span className="data-footnote">
+                {t('Naptári események a helyi data/calendar.ics fájlból olvasódnak.')}
+              </span>
+              {settings?.configured && (
+                <span className="data-footnote">
+                  {t('Az eszközök találatai bekerülnek a beállított chatmodell kérésébe.')}
+                </span>
+              )}
             </div>
             <div>
               <span className="privacy-check">

@@ -5,6 +5,7 @@ import { loadConfig } from '../../src/config.js';
 import type { AppConfig } from '../../src/config.js';
 import type { LlmProvider, LlmRequest, LlmResponse } from '../../src/domain/llm-provider.js';
 import type { MemoryRepository } from '../../src/domain/memory-repository.js';
+import type { AgentToolName } from '@home-memory/shared';
 import { JsonMemoryRepository } from '../../src/infrastructure/persistence/json-memory-repository.js';
 import { createMemoryApplicationServices } from '../../src/application/repository-memory-service.js';
 import { createApplication } from '../../src/http/application.js';
@@ -37,6 +38,7 @@ export async function createTestRuntime(
     provider?: boolean;
     dataDirectory?: string;
     repository?: MemoryRepository;
+    agentTools?: AgentToolName[];
   } = {},
 ): Promise<TestRuntime> {
   const dataDirectory =
@@ -50,12 +52,15 @@ export async function createTestRuntime(
     LLM_API_KEY: options.provider === false ? '' : 'test-only-key',
     LLM_MODEL: options.provider === false ? '' : 'fixture-model',
     OPENAI_STRUCTURED_OUTPUT: 'true',
+    AGENT_TOOLS: options.agentTools?.join(',') ?? '',
   });
   const repository = options.repository ?? new JsonMemoryRepository(dataDirectory);
   await repository.initialize();
   const provider = new FakeLlmProvider();
   const services = createMemoryApplicationServices({
     repository,
+    agentTools: config.agentTools,
+    dataDirectory: config.dataPath,
     providerConfigured: options.provider !== false,
     model: config.model,
     ...(options.provider === false ? {} : { provider }),
