@@ -1,6 +1,6 @@
 # Architecture
 
-Home Memory Agent v0.3.0 is a single-user modular monolith. One Node.js
+Home Memory Agent v0.4.0 is a single-user modular monolith. One Node.js
 process serves the static React application, REST API, and local SQLite
 memory store. Configured language and embedding models are outbound
 providers; neither receives a repository handle or performs a storage write.
@@ -14,6 +14,10 @@ apps/web ── same-origin JSON API ── apps/api
                                          └── MemorySearchService
                                              ├── local lexical ranking
                                              └── configured embedding adapter
+                                         └── AgentToolRegistry
+                                             ├── Open-Meteo weather adapter
+                                             ├── local iCalendar adapter
+                                             └── local notes search adapter
 ```
 
 ## Packages
@@ -82,6 +86,25 @@ memory content are always treated as data, never as instructions to
 execute. A memory change clears active server-side chat history and
 invalidates responses still in flight under an earlier memory-context
 generation.
+
+## Agent tools
+
+The chat model can request one of three read-only operations:
+`weather.getForecast`, `calendar.getEvents`, and `notes.search`. The
+server executes only operations explicitly listed in `AGENT_TOOLS`,
+validates each input against that operation's schema, bounds results, and
+allows at most three tool executions per chat request. Unknown or disabled
+operations are never executed. Tool results are treated as untrusted data
+when the model is asked to produce its final answer.
+
+Weather requests use fixed Open-Meteo geocoding and forecast endpoints;
+the place name is sent to Open-Meteo and the returned result is attributed
+in the assistant context. Calendar events are read from the local
+`data/calendar.ics` file. The adapter preserves the event time zone and
+reports recurrence rules, but does not expand recurring instances. Notes
+are searched locally; if embeddings are configured, that search still
+sends its query to the configured embedding provider as disclosed in
+Settings. Tool operations do not create, update, or delete user data.
 
 ## Provider details
 

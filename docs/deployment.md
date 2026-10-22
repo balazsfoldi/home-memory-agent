@@ -40,6 +40,7 @@ service:
 | `EMBEDDING_API_KEY`        | Embedding API key. Blank reuses `LLM_API_KEY`; Ollama does not use it.                                           |
 | `EMBEDDING_MODEL`          | Embedding model name, for example `nomic-embed-text`.                                                            |
 | `EMBEDDING_TIMEOUT_MS`     | Embedding request timeout in milliseconds (1,000–300,000).                                                       |
+| `AGENT_TOOLS`              | Comma-separated per-operation allowlist. Blank disables every tool. See the operation names below.              |
 | `HOST` / `PORT`            | API bind address and port. Compose sets `HOST=0.0.0.0` inside the container and publishes only to host loopback. |
 
 For local Ollama on Windows with Docker, pull an embedding model first,
@@ -62,6 +63,32 @@ build the local vector index. The settings page displays this notice.
 Ollama data stays wherever its configured endpoint runs; an Ollama
 instance in another container should be addressed by its Docker network
 name rather than `localhost`.
+
+## Agent tools
+
+Tools are read-only and disabled by default. Enable only the operations
+you want the assistant to use, then restart the service:
+
+```dotenv
+AGENT_TOOLS=weather.getForecast,calendar.getEvents,notes.search
+```
+
+The supported operations are `weather.getForecast` (sends the requested
+place to Open-Meteo), `calendar.getEvents` (reads a local iCalendar file),
+and `notes.search` (searches active saved memories). The Settings page
+shows the permission state for every operation. A chat request can execute
+at most three tools, and the server rejects disabled operations even if
+the model asks for them.
+
+To use a local calendar, export it as iCalendar and save it as
+`data/calendar.ics` in the configured data directory. The file remains
+local. Single events are returned with their timezone; recurring rules are
+identified but are not expanded into occurrences. Weather uses the
+[Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api)
+and [forecast API](https://open-meteo.com/en/docs); its place-name input is
+sent to that service. `notes.search` remains local unless semantic
+embeddings are configured, in which case the existing embedding privacy
+notice applies.
 
 ## JSON migration
 

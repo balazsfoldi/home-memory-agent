@@ -21,11 +21,11 @@ memories to your preferred LLM when needed.
 
 🚧 Early development / experimental
 
-The current application version is **v0.3.0**. The project is under active
+The current application version is **v0.4.0**. The project is under active
 development and is not yet recommended for production use.
 
-See the [v0.3.0 release notes](docs/v0.3.0.md) for the storage and semantic
-search changes.
+See the [v0.4.0 release notes](docs/v0.4.0.md) for the permissioned agent
+tools and local calendar support.
 
 ## Quick start
 

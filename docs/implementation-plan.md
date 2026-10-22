@@ -514,3 +514,9 @@ Ennek az eredménye egy kicsi, végig működő és tartósan tároló alap, ame
 - Ollama `/api/embed` és OpenAI-kompatibilis `/embeddings` szolgáltatóval helyi SQLite vektortár épül. A cosine-hasonlóság rangsorol, a lexikai keresés pedig akkor is működik, ha az embedding nincs beállítva vagy nem érhető el.
 - A szemantikus keresés a keresőkifejezést és a mentett emlékek szövegét a konfigurált embedding végpontnak küldi. A beállítások ezt külön jelzik; a vektorok az alkalmazás saját adatkönyvtárában maradnak.
 - A memória módosítása érvényteleníti a korábbi embeddinget. SQLite tranzakciók, JSON-import, archiválás/lejárat és szemantikus rangsorolás regressziós tesztekkel védett.
+
+## v0.4 Agent Tools – megvalósított viselkedés
+
+- A chat strukturált `tool_call` választ kérhet. A szerver csak a regiszterben szereplő és az `AGENT_TOOLS` beállításban külön engedélyezett műveletet futtatja; bemenetét validálja, az eredményt korlátozza, és kérésenként legfeljebb három olvasási eszközhívást enged.
+- A `weather.getForecast` a helynevet az Open-Meteo geokódoló és előrejelző végpontjának küldi el. A `calendar.getEvents` a helyi `data/calendar.ics` fájlból olvas; az ismétlődő szabályokat jelzi, de nem bontja előfordulásokra. A `notes.search` az aktív, helyben tárolt emlékeket keresi, a meglévő embedding beállítás adatvédelmi szabályával.
+- A Beállítások műveletenként mutatja az engedélyezési állapotot és a külső adatküldést. A chat válasza jelzi a sikeresen használt eszközöket. Nincs író vagy törlő tool művelet.
