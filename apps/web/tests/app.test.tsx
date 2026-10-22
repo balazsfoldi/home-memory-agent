@@ -9,6 +9,8 @@ const memory = {
   priority: 'normal' as const,
   createdAt: '2026-10-21T18:00:00.000Z',
   updatedAt: '2026-10-21T18:00:00.000Z',
+  expiresAt: null,
+  archivedAt: null,
 };
 
 describe('Home Memory web interface', () => {
@@ -30,24 +32,37 @@ describe('Home Memory web interface', () => {
             configured,
             structuredProposals: false,
             externalDataNotice: 'A memóriákat helyben kezeled.',
+            embeddingProvider: 'none',
+            embeddingModel: '',
+            embeddingConfigured: false,
+            storageProvider: 'sqlite',
+            semanticSearch: false,
           }),
           { status: 200 },
         );
       }
       if (url.startsWith('/api/memories') && (!init?.method || init.method === 'GET')) {
         const query = new URL(url, 'http://local').searchParams.get('q')?.toLowerCase();
+        const view = new URL(url, 'http://local').searchParams.get('view') ?? 'active';
         const items = query
           ? memories.filter((item) =>
               `${item.category} ${item.content}`.toLowerCase().includes(query),
             )
           : memories;
+        const visible = items.filter((item) =>
+          view === 'all'
+            ? true
+            : view === 'archived'
+              ? Boolean(item.archivedAt)
+              : !item.archivedAt,
+        );
         return new Response(
           JSON.stringify({
-            items: items.map((item) => ({
+            items: visible.map((item) => ({
               memory: item,
               etag: '"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"',
             })),
-            total: items.length,
+            total: visible.length,
           }),
           { status: 200 },
         );

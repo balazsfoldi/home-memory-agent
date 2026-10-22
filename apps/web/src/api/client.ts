@@ -64,11 +64,16 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 
 export const api = {
   async listMemories(
-    filter: { q?: string; category?: string } = {},
+    filter: {
+      q?: string;
+      category?: string;
+      view?: 'active' | 'archived' | 'expired' | 'all';
+    } = {},
   ): Promise<MemoryListResponse> {
     const query = new URLSearchParams();
     if (filter.q) query.set('q', filter.q);
     if (filter.category) query.set('category', filter.category);
+    if (filter.view) query.set('view', filter.view);
     const response = await request(`/api/memories${query.size ? `?${query}` : ''}`);
     const result = memoryListResponseSchema.safeParse(await response.json());
     if (!result.success)
@@ -120,6 +125,36 @@ export const api = {
       method: 'DELETE',
       headers: { 'if-match': etag },
     });
+  },
+
+  async archiveMemory(id: string, etag: string): Promise<MemoryEnvelope> {
+    const response = await request(`/api/memories/${encodeURIComponent(id)}/archive`, {
+      method: 'POST',
+      headers: { 'if-match': etag },
+    });
+    const result = memoryEnvelopeSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'A szerver érvénytelen adatot adott vissza.',
+      );
+    return result.data;
+  },
+
+  async restoreMemory(id: string, etag: string): Promise<MemoryEnvelope> {
+    const response = await request(`/api/memories/${encodeURIComponent(id)}/restore`, {
+      method: 'POST',
+      headers: { 'if-match': etag },
+    });
+    const result = memoryEnvelopeSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'A szerver érvénytelen adatot adott vissza.',
+      );
+    return result.data;
   },
 
   async chat(

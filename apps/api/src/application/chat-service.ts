@@ -8,9 +8,9 @@ import {
 import { ApplicationError } from '../domain/errors.js';
 import type { LlmMessage, LlmProvider } from '../domain/llm-provider.js';
 import type { MemoryRepository } from '../domain/memory-repository.js';
-import { retrieveMemories } from '../domain/memory-retriever.js';
 import { findMemoryDuplicate, memoryEtag } from './memory-service.js';
 import { ConversationStore, type ConversationLease } from './conversation-store.js';
+import { MemorySearchService } from './memory-search-service.js';
 
 type ExplicitIntent = MemoryAction['action'] | null;
 
@@ -124,6 +124,7 @@ export class ChatService {
     private readonly configured: boolean,
     private readonly model: string,
     private readonly conversations = new ConversationStore(),
+    private readonly search = new MemorySearchService(repository),
   ) {}
 
   invalidateHistory(): void {
@@ -147,6 +148,12 @@ export class ChatService {
     const lease = this.conversations.begin(input.conversationId);
     try {
       const memories = await this.repository.list();
+      const now = Date.now();
+      const activeMemories = memories.filter(
+        (memory) =>
+          memory.archivedAt === null &&
+          (memory.expiresAt === null || Date.parse(memory.expiresAt) > now),
+      );
       const intent = explicitIntent(input.message);
       const query = [
         ...lease.messages
@@ -154,7 +161,7 @@ export class ChatService {
           .map((message) => message.content),
         input.message,
       ].join('\n');
-      const ranked = retrieveMemories(query, memories, {
+      const ranked = await this.search.retrieve(query, activeMemories, {
         limit: 5,
         ...(input.category !== undefined ? { category: input.category } : {}),
         maxContextCharacters: 6_000,

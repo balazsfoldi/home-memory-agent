@@ -19,6 +19,7 @@ import { ApiClientError, api } from './api/client.js';
 import { LanguageProvider, useI18n } from './i18n.js';
 
 type Page = 'chat' | 'memories' | 'settings';
+type MemoryView = 'active' | 'archived' | 'expired' | 'all';
 type ChatEntry = {
   id: string;
   role: 'user' | 'assistant';
@@ -34,6 +35,10 @@ function priorityLabel(
   t: (key: string) => string,
 ): string {
   return priority === 'high' ? t('Fontos') : priority === 'low' ? t('Alacsony') : t('Normál');
+}
+
+function expirationValue(date: string): string | null {
+  return date ? new Date(`${date}T23:59:59.999`).toISOString() : null;
 }
 
 function PrioritySelect({
@@ -75,7 +80,9 @@ function Icon({
     | 'edit'
     | 'book'
     | 'moon'
-    | 'refresh';
+    | 'refresh'
+    | 'archive'
+    | 'restore';
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -180,6 +187,17 @@ function Icon({
         <path d="M5.6 9a7 7 0 0 1 11.5-2L20 12M4 12l2.9 5a7 7 0 0 0 11.5-2" />
       </>
     ),
+    archive: (
+      <>
+        <path d="M4 7h16v14H4zM3 3h18v4H3zM9 12h6" />
+      </>
+    ),
+    restore: (
+      <>
+        <path d="M20 7v5h-5M4 17v-5h5" />
+        <path d="M5.6 9a7 7 0 0 1 11.5-2L20 12M4 12l2.9 5a7 7 0 0 0 11.5-2" />
+      </>
+    ),
   };
   return (
     <svg
@@ -220,6 +238,7 @@ function AppContent() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const [memoryView, setMemoryView] = useState<MemoryView>('active');
   const [chatMessages, setChatMessages] = useState<ChatEntry[]>([]);
   const [chatText, setChatText] = useState('');
   const [sending, setSending] = useState(false);
@@ -252,15 +271,21 @@ function AppContent() {
   };
   const currentPage = pageContent[page];
 
-  const loadMemories = useCallback(async (q?: string) => {
-    const result: MemoryListResponse = await api.listMemories(q ? { q } : {});
-    setMemories(result.items);
-    setMemoryTotal(result.total);
-  }, []);
+  const loadMemories = useCallback(
+    async (q?: string, view: MemoryView = memoryView) => {
+      const result: MemoryListResponse = await api.listMemories({
+        ...(q ? { q } : {}),
+        view,
+      });
+      setMemories(result.items);
+      setMemoryTotal(result.total);
+    },
+    [memoryView],
+  );
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.listMemories(), api.settings()])
+    Promise.all([api.listMemories({ view: 'active' }), api.settings()])
       .then(([memoryResult, configuration]) => {
         if (!active) return;
         setMemories(memoryResult.items);
@@ -294,7 +319,7 @@ function AppContent() {
   useEffect(() => {
     if (page !== 'memories') return;
     const timer = window.setTimeout(() => {
-      loadMemories(search.trim() || undefined).catch((failure: unknown) => {
+      loadMemories(search.trim() || undefined, memoryView).catch((failure: unknown) => {
         setError(
           t(
             failure instanceof Error
@@ -305,7 +330,7 @@ function AppContent() {
       });
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [loadMemories, page, search, t]);
+  }, [loadMemories, memoryView, page, search, t]);
 
   const categories = useMemo(
     () =>
@@ -407,13 +432,13 @@ function AppContent() {
   async function handleMemoryCreated(memory: MemoryEnvelope): Promise<void> {
     setCreating(false);
     clearConversationAfterMutation();
-    await loadMemories(search.trim() || undefined);
+    await loadMemories(search.trim() || undefined, memoryView);
     setNotice(t('memorySaved', { category: memory.memory.category }));
   }
 
   async function handleMemoryChanged(message: string): Promise<void> {
     clearConversationAfterMutation();
-    await loadMemories(search.trim() || undefined);
+    await loadMemories(search.trim() || undefined, memoryView);
     setNotice(message);
     setError('');
   }
@@ -442,7 +467,7 @@ function AppContent() {
         );
       }
       clearConversationAfterMutation();
-      await loadMemories(search.trim() || undefined);
+      await loadMemories(search.trim() || undefined, memoryView);
       setNotice(message);
       setChatMessages([
         {
@@ -492,7 +517,7 @@ function AppContent() {
     setError('');
     try {
       await Promise.all([
-        loadMemories(search.trim() || undefined),
+        loadMemories(search.trim() || undefined, memoryView),
         api.settings().then(setSettings),
       ]);
     } catch (failure) {
@@ -502,7 +527,7 @@ function AppContent() {
     } finally {
       setLoading(false);
     }
-  }, [loadMemories, search, t]);
+  }, [loadMemories, memoryView, search, t]);
 
   return (
     <div className="app-shell">
@@ -577,7 +602,7 @@ function AppContent() {
         <div className="sidebar-footer">
           <span className="footer-avatar">H</span>
           <span>Home Memory Agent</span>
-          <span className="version-tag">v0.2.5</span>
+          <span className="version-tag">v0.3</span>
         </div>
       </aside>
 
@@ -702,6 +727,19 @@ function AppContent() {
                   placeholder={t('Keresés az emlékek között...')}
                 />
                 <span className="search-shortcut">/</span>
+              </label>
+
+              <label className="memory-view-filter">
+                <span>{t('Memórianézet')}</span>
+                <select
+                  value={memoryView}
+                  onChange={(event) => setMemoryView(event.target.value as MemoryView)}
+                >
+                  <option value="active">{t('Aktív')}</option>
+                  <option value="archived">{t('Archivált')}</option>
+                  <option value="expired">{t('Lejárt')}</option>
+                  <option value="all">{t('Mind')}</option>
+                </select>
               </label>
 
               <div className="memory-list-header">
@@ -1161,6 +1199,7 @@ function CreateMemoryForm({
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
+  const [expiresOn, setExpiresOn] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent): Promise<void> {
@@ -1168,7 +1207,14 @@ function CreateMemoryForm({
     setSubmitting(true);
     setError('');
     try {
-      await onCreated(await api.createMemory({ category, content, priority }));
+      await onCreated(
+        await api.createMemory({
+          category,
+          content,
+          priority,
+          expiresAt: expirationValue(expiresOn),
+        }),
+      );
     } catch (failure) {
       setError(t(failure instanceof Error ? failure.message : 'A mentés nem sikerült.'));
     } finally {
@@ -1228,6 +1274,14 @@ function CreateMemoryForm({
         {t('Prioritás')}
         <PrioritySelect value={priority} onChange={setPriority} />
       </label>
+      <label>
+        {t('Lejárati dátum (nem kötelező)')}
+        <input
+          type="date"
+          value={expiresOn}
+          onChange={(event) => setExpiresOn(event.target.value)}
+        />
+      </label>
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -1259,6 +1313,7 @@ function MemoryCard({
   const [category, setCategory] = useState(envelope.memory.category);
   const [content, setContent] = useState(envelope.memory.content);
   const [priority, setPriority] = useState(envelope.memory.priority);
+  const [expiresOn, setExpiresOn] = useState(envelope.memory.expiresAt?.slice(0, 10) ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const memory = envelope.memory;
@@ -1267,17 +1322,30 @@ function MemoryCard({
     setCategory(memory.category);
     setContent(memory.content);
     setPriority(memory.priority);
+    setExpiresOn(memory.expiresAt?.slice(0, 10) ?? '');
     setEditing(false);
     setConfirmDelete(false);
     setError('');
-  }, [memory.id, envelope.etag, memory.category, memory.content, memory.priority]);
+  }, [
+    memory.id,
+    envelope.etag,
+    memory.category,
+    memory.content,
+    memory.priority,
+    memory.expiresAt,
+  ]);
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setError('');
     try {
-      await api.updateMemory(memory.id, envelope.etag, { category, content, priority });
+      await api.updateMemory(memory.id, envelope.etag, {
+        category,
+        content,
+        priority,
+        expiresAt: expirationValue(expiresOn),
+      });
       setEditing(false);
       await onChanged(t('memoryUpdated', { category: category.trim() }));
     } catch (failure) {
@@ -1298,6 +1366,20 @@ function MemoryCard({
     } finally {
       setBusy(false);
       setConfirmDelete(false);
+    }
+  }
+
+  async function setArchiveState(archived: boolean): Promise<void> {
+    setBusy(true);
+    setError('');
+    try {
+      if (archived) await api.archiveMemory(memory.id, envelope.etag);
+      else await api.restoreMemory(memory.id, envelope.etag);
+      await onChanged(t(archived ? 'memoryArchived' : 'memoryRestored'));
+    } catch (failure) {
+      setError(t(failure instanceof Error ? failure.message : 'A mentés nem sikerült.'));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1332,6 +1414,14 @@ function MemoryCard({
               {t('Prioritás')}
               <PrioritySelect value={priority} onChange={setPriority} />
             </label>
+            <label>
+              {t('Lejárati dátum (nem kötelező)')}
+              <input
+                type="date"
+                value={expiresOn}
+                onChange={(event) => setExpiresOn(event.target.value)}
+              />
+            </label>
             {error && (
               <p className="form-error" role="alert">
                 {error}
@@ -1360,12 +1450,26 @@ function MemoryCard({
               <span className={`priority-tag priority-${memory.priority}`}>
                 {priorityLabel(memory.priority, t)}
               </span>
+              {memory.archivedAt && <span className="priority-tag">{t('Archivált')}</span>}
+              {!memory.archivedAt &&
+                memory.expiresAt &&
+                Date.parse(memory.expiresAt) <= Date.now() && (
+                  <span className="priority-tag priority-expired">{t('Lejárt')}</span>
+                )}
               <span className="memory-date">
                 {t('Módosítva')}{' '}
                 {new Intl.DateTimeFormat(language === 'hu' ? 'hu-HU' : 'en-US', {
                   dateStyle: 'medium',
                 }).format(new Date(memory.updatedAt))}
               </span>
+              {memory.expiresAt && (
+                <span className="memory-date">
+                  {t('Lejár')}{' '}
+                  {new Intl.DateTimeFormat(language === 'hu' ? 'hu-HU' : 'en-US', {
+                    dateStyle: 'medium',
+                  }).format(new Date(memory.expiresAt))}
+                </span>
+              )}
             </div>
             <p className="memory-content-text">{memory.content}</p>
           </>
@@ -1396,6 +1500,15 @@ function MemoryCard({
       </div>
       {!editing && !confirmDelete && (
         <div className="memory-actions">
+          <button
+            className="icon-button"
+            aria-label={t(memory.archivedAt ? 'Emlék visszaállítása' : 'Emlék archiválása')}
+            title={t(memory.archivedAt ? 'Emlék visszaállítása' : 'Emlék archiválása')}
+            disabled={busy}
+            onClick={() => void setArchiveState(!memory.archivedAt)}
+          >
+            <Icon name={memory.archivedAt ? 'restore' : 'archive'} size={16} />
+          </button>
           <button
             className="icon-button"
             aria-label={t('memoryEditLabel', { category: memory.category })}
@@ -1546,6 +1659,25 @@ function SettingsPanel({
                 <Icon name="check" size={14} />
               </span>
               <div>
+                <strong>
+                  {t(
+                    settings?.semanticSearch
+                      ? 'Szemantikus keresés beállítva'
+                      : 'Szemantikus keresés nincs beállítva',
+                  )}
+                </strong>
+                <span>
+                  {settings?.embeddingConfigured
+                    ? settings.embeddingModel
+                    : t('Ollama vagy OpenAI-kompatibilis embedding szolgáltató állítható be.')}
+                </span>
+              </div>
+            </div>
+            <div>
+              <span className="privacy-check">
+                <Icon name="check" size={14} />
+              </span>
+              <div>
                 <strong>{t('A chatelőzmény csak átmeneti.')}</strong>
                 <span>{t('Az alkalmazás nem ment chatnaplót a lemezre.')}</span>
               </div>
@@ -1571,18 +1703,29 @@ function SettingsPanel({
             <Icon name="memory" size={22} />
           </div>
           <strong>{t('elmentett emlék')}</strong>
-          <span className="data-footnote">{t('JSON-fájlban, saját tárhelyen')}</span>
+          <span className="data-footnote">
+            {t(
+              settings?.storageProvider === 'json'
+                ? 'JSON-fájlban, saját tárhelyen'
+                : 'SQLite-adatbázisban, saját tárhelyen',
+            )}
+          </span>
           <div className="data-divider" />
           <div className="data-footnote-line">
             <Icon name="lock" size={13} />
-            {t('Nem osztjuk meg senkivel.')}
+            {t('Az adatok helyben maradnak, kivéve ha külső szolgáltatót állítasz be.')}
           </div>
         </article>
         <article className="settings-card tips-card">
           <span className="section-kicker">{t('SAJÁT TÁRHELYED')}</span>
           <h3>{t('Te adod a kulcsot.')}</h3>
           <p>
-            {t('A memóriafájl a')} <code>data/memories.json</code>
+            {t('A memóriafájl a')}{' '}
+            <code>
+              {settings?.storageProvider === 'json'
+                ? 'data/memories.json'
+                : 'data/memories.sqlite'}
+            </code>
             {t(
               ' helyen van. Mentsd a teljes adatkönyvtárat, hogy a mentéseid is kézben maradjanak.',
             )}

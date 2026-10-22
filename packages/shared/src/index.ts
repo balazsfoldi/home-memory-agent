@@ -15,6 +15,8 @@ export const memorySchema = z
     priority: memoryPrioritySchema.default('normal'),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime().nullable().default(null),
+    archivedAt: z.iso.datetime().nullable().default(null),
   })
   .strict();
 
@@ -25,6 +27,7 @@ export const createMemoryInputSchema = z
     category: z.string().trim().min(1).max(MEMORY_CATEGORY_MAX_LENGTH),
     content: z.string().trim().min(1).max(MEMORY_CONTENT_MAX_LENGTH),
     priority: memoryPrioritySchema.default('normal'),
+    expiresAt: z.iso.datetime().nullable().optional(),
   })
   .strict();
 
@@ -136,6 +139,11 @@ export const settingsResponseSchema = z
     configured: z.boolean(),
     structuredProposals: z.boolean(),
     externalDataNotice: z.string(),
+    embeddingProvider: z.enum(['none', 'openai-compatible', 'ollama']),
+    embeddingModel: z.string(),
+    embeddingConfigured: z.boolean(),
+    storageProvider: z.enum(['sqlite', 'json']),
+    semanticSearch: z.boolean(),
   })
   .strict();
 

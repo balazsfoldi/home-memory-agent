@@ -26,6 +26,8 @@ describe('memory and chat API', () => {
           provider: 'openai-compatible',
           model: 'fixture-model',
           configured: true,
+          storageProvider: 'json',
+          semanticSearch: false,
         });
         expect(JSON.stringify(body)).not.toContain(runtime?.config.apiKey);
         expect(JSON.stringify(body)).not.toContain('example.invalid');
@@ -278,6 +280,99 @@ describe('memory and chat API', () => {
       .get('/api/memories')
       .expect(200)
       .expect(({ body }) => expect(body.total).toBe(0));
+  });
+
+  it('filters expired memories and archives and restores memories with ETag protection', async () => {
+    runtime = await createTestRuntime();
+    const expired = await request(runtime.app)
+      .post('/api/memories')
+      .send({
+        category: 'Travel',
+        content: 'Old hotel booking information.',
+        expiresAt: '2020-01-01T23:59:59.999Z',
+      })
+      .expect(201);
+    const active = await request(runtime.app)
+      .post('/api/memories')
+      .send({ category: 'Travel', content: 'Quiet rooms are preferred.' })
+      .expect(201);
+
+    await request(runtime.app)
+      .get('/api/memories')
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.items.map((item: { memory: { id: string } }) => item.memory.id)).toEqual([
+          active.body.memory.id,
+        ]),
+      );
+    await request(runtime.app)
+      .get('/api/memories?view=expired')
+      .expect(200)
+      .expect(({ body }) => expect(body.items[0].memory.id).toBe(expired.body.memory.id));
+
+    const archived = await request(runtime.app)
+      .post(`/api/memories/${active.body.memory.id}/archive`)
+      .set('If-Match', active.body.etag)
+      .expect(200);
+    expect(archived.body.memory.archivedAt).toBeTruthy();
+    await request(runtime.app)
+      .get('/api/memories')
+      .expect(200)
+      .expect(({ body }) => expect(body.total).toBe(0));
+    await request(runtime.app)
+      .get('/api/memories?view=archived')
+      .expect(200)
+      .expect(({ body }) => expect(body.items[0].memory.id).toBe(active.body.memory.id));
+
+    const restored = await request(runtime.app)
+      .post(`/api/memories/${active.body.memory.id}/restore`)
+      .set('If-Match', archived.body.etag)
+      .expect(200);
+    expect(restored.body.memory.archivedAt).toBeNull();
+    await request(runtime.app)
+      .get('/api/memories')
+      .expect(200)
+      .expect(({ body }) => expect(body.total).toBe(1));
+  });
+
+  it('never sends expired or archived memories to chat context', async () => {
+    runtime = await createTestRuntime();
+    const current = await request(runtime.app)
+      .post('/api/memories')
+      .send({ category: 'Travel', content: 'I prefer calm hotels.' })
+      .expect(201);
+    const archived = await request(runtime.app)
+      .post('/api/memories')
+      .send({ category: 'Travel', content: 'I like large hotels.' })
+      .expect(201);
+    await request(runtime.app)
+      .post(`/api/memories/${archived.body.memory.id}/archive`)
+      .set('If-Match', archived.body.etag)
+      .expect(200);
+    await request(runtime.app)
+      .post('/api/memories')
+      .send({
+        category: 'Travel',
+        content: 'I prefer quiet hotels.',
+        expiresAt: '2020-01-01T23:59:59.999Z',
+      })
+      .expect(201);
+
+    runtime.provider.responses.push(
+      JSON.stringify({ kind: 'answer', message: 'I found one current preference.' }),
+    );
+    const result = await request(runtime.app)
+      .post('/api/chat')
+      .send({ message: 'What hotel style should I choose?' })
+      .expect(200);
+
+    expect(result.body.usedMemoryIds).toEqual([current.body.memory.id]);
+    expect(
+      runtime.provider.requests[0]?.messages.map(({ content }) => content).join('\n'),
+    ).not.toContain('large hotels');
+    expect(
+      runtime.provider.requests[0]?.messages.map(({ content }) => content).join('\n'),
+    ).not.toContain('quiet hotels');
   });
 
   it('uses only relevant local context and starts a new conversation after a write', async () => {

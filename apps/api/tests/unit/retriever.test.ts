@@ -10,6 +10,8 @@ const memories: Memory[] = [
     priority: 'normal',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    expiresAt: null,
+    archivedAt: null,
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -18,6 +20,8 @@ const memories: Memory[] = [
     priority: 'normal',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    expiresAt: null,
+    archivedAt: null,
   },
   {
     id: '33333333-3333-4333-8333-333333333333',
@@ -26,6 +30,8 @@ const memories: Memory[] = [
     priority: 'normal',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    expiresAt: null,
+    archivedAt: null,
   },
 ];
 

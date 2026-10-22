@@ -13,6 +13,7 @@ import {
   createMemoryInputSchema,
   updateMemoryInputSchema,
 } from '@home-memory/shared';
+import { hasConfiguredEmbeddingProvider } from '../config.js';
 import type { AppConfig } from '../config.js';
 import { ApplicationError } from '../domain/errors.js';
 import type { MemoryApplicationServices } from '../application/repository-memory-service.js';
@@ -177,29 +178,52 @@ export function createApplication(
         config.baseUrl &&
         (config.provider !== 'openai-compatible' || config.apiKey),
       );
+    const embeddingConfigured = hasConfiguredEmbeddingProvider(config);
+    const notices = [
+      configured
+        ? config.provider === 'ollama'
+          ? 'A beszélgetés és a kiválasztott emlékek a beállított Ollama-végpontnak is elküldhetők.'
+          : 'A beszélgetés és a kiválasztott emlékek a beállított külső LLM-szolgáltatóhoz kerülnek.'
+        : '',
+      embeddingConfigured
+        ? 'A keresőkifejezést és a mentett emlékek szövegét a beállított embedding-végpontnak küldi el a szemantikus indexeléshez.'
+        : '',
+    ].filter(Boolean);
     response.json({
       provider: config.provider,
       model: config.model,
       configured,
       structuredProposals: configured,
-      externalDataNotice: configured
-        ? config.provider === 'ollama'
-          ? 'A beszélgetés és a kiválasztott emlékek a beállított Ollama-végpontnak is elküldhetők.'
-          : 'A beszélgetés és a kiválasztott emlékek a beállított külső LLM-szolgáltatóhoz kerülnek.'
-        : 'Nincs beállítva nyelvi modell. A memóriákat helyben, az alkalmazásból kezelheted.',
+      externalDataNotice:
+        notices.join(' ') ||
+        'Nincs beállítva nyelvi modell. A memóriákat helyben, az alkalmazásból kezelheted.',
+      embeddingProvider: config.embeddingProvider,
+      embeddingModel: config.embeddingModel,
+      embeddingConfigured,
+      storageProvider: config.storeProvider,
+      semanticSearch: embeddingConfigured,
     });
   });
 
   app.get('/api/memories', async (request, response) => {
     const q = request.query.q;
     const category = request.query.category;
+    const view = request.query.view;
     if (q !== undefined && (typeof q !== 'string' || q.length > 2_000))
       throw new ApplicationError('INVALID_INPUT', 'A keresőkifejezés érvénytelen.', 400);
     if (category !== undefined && (typeof category !== 'string' || category.length > 80))
       throw new ApplicationError('INVALID_INPUT', 'A kategória érvénytelen.', 400);
+    if (
+      view !== undefined &&
+      (typeof view !== 'string' || !['active', 'archived', 'expired', 'all'].includes(view))
+    )
+      throw new ApplicationError('INVALID_INPUT', 'A memória nézete érvénytelen.', 400);
     const result = await services.memories.list({
       ...(typeof q === 'string' ? { q } : {}),
       ...(typeof category === 'string' ? { category } : {}),
+      ...(typeof view === 'string'
+        ? { view: view as 'active' | 'archived' | 'expired' | 'all' }
+        : {}),
       limit: parseQueryInteger(request.query.limit, 50, 100),
       offset: parseQueryInteger(request.query.offset, 0, 100_000),
     });
@@ -244,6 +268,26 @@ export function createApplication(
     services.chat.invalidateHistory();
     responseEtag(response, updated.etag);
     response.json(updated);
+  });
+
+  app.post('/api/memories/:id/archive', rejectInvalidOrigin, async (request, response) => {
+    const archived = await services.memories.archive(
+      typeof request.params.id === 'string' ? request.params.id : '',
+      requireStrongEtag(request),
+    );
+    services.chat.invalidateHistory();
+    responseEtag(response, archived.etag);
+    response.json(archived);
+  });
+
+  app.post('/api/memories/:id/restore', rejectInvalidOrigin, async (request, response) => {
+    const restored = await services.memories.restore(
+      typeof request.params.id === 'string' ? request.params.id : '',
+      requireStrongEtag(request),
+    );
+    services.chat.invalidateHistory();
+    responseEtag(response, restored.etag);
+    response.json(restored);
   });
 
   app.delete('/api/memories/:id', rejectInvalidOrigin, async (request, response) => {

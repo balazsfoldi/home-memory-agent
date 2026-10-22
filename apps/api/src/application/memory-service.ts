@@ -8,6 +8,7 @@ import {
 } from '@home-memory/shared';
 import type { MemoryRepository } from '../domain/memory-repository.js';
 import { ApplicationError, notFoundError } from '../domain/errors.js';
+import { MemorySearchService } from './memory-search-service.js';
 
 export interface MemoryEnvelope {
   memory: Memory;
@@ -120,31 +121,61 @@ export function memoryEtag(memory: Memory): string {
 }
 
 export class MemoryService {
+  private readonly search: MemorySearchService;
+
   constructor(
     private readonly repository: MemoryRepository,
     private readonly now: () => Date = () => new Date(),
     private readonly idFactory: () => string = randomUUID,
-  ) {}
+    search?: MemorySearchService,
+  ) {
+    this.search = search ?? new MemorySearchService(repository);
+  }
 
   async list(
-    options: { q?: string; category?: string; limit?: number; offset?: number } = {},
+    options: {
+      q?: string;
+      category?: string;
+      limit?: number;
+      offset?: number;
+      view?: 'active' | 'archived' | 'expired' | 'all';
+    } = {},
   ): Promise<{ items: MemoryEnvelope[]; total: number }> {
     const memories = await this.repository.list();
     const query = options.q?.trim().toLocaleLowerCase('hu-HU');
     const category = options.category?.trim().toLocaleLowerCase('hu-HU');
+    const now = this.now();
     const matching = memories
+      .filter((memory) => {
+        const expired =
+          memory.expiresAt !== null && Date.parse(memory.expiresAt) <= now.getTime();
+        switch (options.view ?? 'active') {
+          case 'archived':
+            return memory.archivedAt !== null;
+          case 'expired':
+            return memory.archivedAt === null && expired;
+          case 'all':
+            return true;
+          default:
+            return memory.archivedAt === null && !expired;
+        }
+      })
       .filter((memory) => !category || memory.category.toLocaleLowerCase('hu-HU') === category)
-      .filter(
-        (memory) =>
-          !query ||
-          `${memory.category} ${memory.content}`.toLocaleLowerCase('hu-HU').includes(query),
-      )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+    let results = matching;
+    if (query) {
+      const ranked = await this.search.retrieve(query, matching, {
+        limit: matching.length || 1,
+        maxContextCharacters: Number.MAX_SAFE_INTEGER,
+        ...(options.category ? { category: options.category } : {}),
+      });
+      results = ranked.map(({ memory }) => memory);
+    }
     const offset = options.offset ?? 0;
     const limit = options.limit ?? 50;
     return {
-      total: matching.length,
-      items: matching
+      total: results.length,
+      items: results
         .slice(offset, offset + limit)
         .map((memory) => ({ memory, etag: memoryEtag(memory) })),
     };
@@ -185,8 +216,11 @@ export class MemoryService {
         priority: parsed.data.priority,
         createdAt: now,
         updatedAt: now,
+        expiresAt: parsed.data.expiresAt ?? null,
+        archivedAt: null,
       });
     });
+    void this.search.index(memory);
     return { memory, etag: memoryEtag(memory) };
   }
 
@@ -230,8 +264,43 @@ export class MemoryService {
         content: parsed.data.content,
         priority: parsed.data.priority ?? existing.priority,
         updatedAt: this.now().toISOString(),
+        expiresAt:
+          parsed.data.expiresAt === undefined ? existing.expiresAt : parsed.data.expiresAt,
       };
       return transaction.update(updated);
+    });
+    void this.search.index(memory);
+    return { memory, etag: memoryEtag(memory) };
+  }
+
+  async archive(id: string, expectedEtag: string): Promise<MemoryEnvelope> {
+    return this.setArchived(id, expectedEtag, true);
+  }
+
+  async restore(id: string, expectedEtag: string): Promise<MemoryEnvelope> {
+    return this.setArchived(id, expectedEtag, false);
+  }
+
+  private async setArchived(
+    id: string,
+    expectedEtag: string,
+    archived: boolean,
+  ): Promise<MemoryEnvelope> {
+    const memory = await this.repository.transaction((transaction) => {
+      const existing = transaction.findById(id);
+      if (!existing) throw notFoundError();
+      if (memoryEtag(existing) !== expectedEtag) {
+        throw new ApplicationError(
+          'STALE_MEMORY',
+          'A memória azóta megváltozott. Töltsd újra, és próbáld ismét.',
+          412,
+        );
+      }
+      return transaction.update({
+        ...existing,
+        archivedAt: archived ? this.now().toISOString() : null,
+        updatedAt: this.now().toISOString(),
+      });
     });
     return { memory, etag: memoryEtag(memory) };
   }

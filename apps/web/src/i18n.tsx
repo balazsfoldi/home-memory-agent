@@ -60,6 +60,17 @@ const english: Record<string, string> = {
   'Új emlék': 'New memory',
   'Keresés az emlékek között': 'Search memories',
   'Keresés az emlékek között...': 'Search your memories...',
+  Memórianézet: 'Memory view',
+  Aktív: 'Active',
+  Archivált: 'Archived',
+  Lejárt: 'Expired',
+  Mind: 'All',
+  Lejár: 'Expires',
+  'Lejárati dátum (nem kötelező)': 'Expiration date (optional)',
+  'Emlék archiválása': 'Archive memory',
+  'Emlék visszaállítása': 'Restore memory',
+  memoryArchived: 'Archived the memory.',
+  memoryRestored: 'Restored the memory.',
   TALÁLAT: 'RESULTS',
   'ELMENTETT EMLÉK': 'SAVED MEMORIES',
   'SZERKESZTÉS ÉS TÖRLÉS': 'EDIT AND DELETE',
@@ -147,6 +158,19 @@ const english: Record<string, string> = {
   'Nincs beállítva': 'Not configured',
   'A memória kezeléséhez nem kell modellt beállítani.':
     'You do not need a model to manage your memories.',
+  'Szemantikus keresés beállítva': 'Semantic search configured',
+  'Szemantikus keresés nincs beállítva': 'Semantic search not configured',
+  'Ollama vagy OpenAI-kompatibilis embedding szolgáltató állítható be.':
+    'Configure an Ollama or OpenAI-compatible embedding provider to enable it.',
+  'SQLite-adatbázisban, saját tárhelyen': 'In a SQLite database on your own storage',
+  'Az adatok helyben maradnak, kivéve ha külső szolgáltatót állítasz be.':
+    'Data stays in your local store unless you configure an external provider.',
+  'A keresőkifejezést és a mentett emlékek szövegét a beállított embedding-végpontnak küldi el a szemantikus indexeléshez.':
+    'Search queries and saved memory text are sent to the configured embedding endpoint for semantic indexing.',
+  'A beszélgetés és a kiválasztott emlékek a beállított Ollama-végpontnak is elküldhetők. A keresőkifejezést és a mentett emlékek szövegét a beállított embedding-végpontnak küldi el a szemantikus indexeléshez.':
+    'Your chat and selected memories may be sent to the configured Ollama endpoint. Search queries and saved memory text are also sent to the configured embedding endpoint for semantic indexing.',
+  'A beszélgetés és a kiválasztott emlékek a beállított külső LLM-szolgáltatóhoz kerülnek. A keresőkifejezést és a mentett emlékek szövegét a beállított embedding-végpontnak küldi el a szemantikus indexeléshez.':
+    'Your chat and selected memories are sent to the configured external LLM provider. Search queries and saved memory text are also sent to the configured embedding endpoint for semantic indexing.',
   'Beállítások frissítése': 'Refresh settings',
   'Nyisd meg a .env fájlt': 'Open the .env file',
   'A projekt gyökérmappájában találod.': 'You will find it in the project root folder.',
@@ -184,6 +208,7 @@ const english: Record<string, string> = {
   'Frissítsd a memórialistát, mielőtt módosítod az emléket.':
     'Refresh the memory list before changing this memory.',
   'A keresőkifejezés érvénytelen.': 'The search term is invalid.',
+  'A memória nézete érvénytelen.': 'The memory view is invalid.',
   'Ellenőrizd a kategóriát és a memória szövegét.': 'Check the category and memory text.',
   'A memória nem található.': 'The memory was not found.',
   'A beszélgetés lejárt. Indíts új beszélgetést.':
