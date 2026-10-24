@@ -14,6 +14,7 @@ import {
   chatRequestSchema,
   createAutomationInputSchema,
   createMemoryInputSchema,
+  memoryImportDocumentSchema,
   updateMemoryInputSchema,
 } from '@home-memory/shared';
 import { hasConfiguredEmbeddingProvider } from '../config.js';
@@ -24,6 +25,7 @@ import type { MemoryApplicationServices } from '../application/repository-memory
 const projectRoot = resolve(fileURLToPath(new URL('../../../../', import.meta.url)));
 const publicWebDirectory = resolve(projectRoot, 'apps/web/dist');
 const API_BODY_LIMIT = '32kb';
+const MEMORY_IMPORT_BODY_LIMIT = '5mb';
 
 interface RateBucket {
   count: number;
@@ -142,6 +144,10 @@ export function createApplication(
     response.setHeader('cache-control', 'no-store');
     next();
   });
+  app.use(
+    '/api/memories/import',
+    express.json({ limit: MEMORY_IMPORT_BODY_LIMIT, strict: true }),
+  );
   app.use(express.json({ limit: API_BODY_LIMIT, strict: true }));
 
   app.get('/api/health', (_request, response) => {
@@ -303,6 +309,23 @@ export function createApplication(
       offset: parseQueryInteger(request.query.offset, 0, 100_000),
     });
     response.json(result);
+  });
+
+  app.get('/api/memories/export', async (_request, response) => {
+    response.json(await services.memories.exportAll());
+  });
+
+  app.post('/api/memories/import', rejectInvalidOrigin, async (request, response) => {
+    const document = memoryImportDocumentSchema.safeParse(request.body);
+    if (!document.success)
+      throw new ApplicationError(
+        'INVALID_INPUT',
+        'Az importfájl nem megfelelő. Használd a Home Memory Agent JSON-formátumát; legfeljebb 500 emlék tölthető fel egyszerre.',
+        400,
+      );
+    const result = await services.memories.importMany(document.data);
+    if (result.imported > 0) services.chat.invalidateHistory();
+    response.status(200).json(result);
   });
 
   app.post('/api/memories', rejectInvalidOrigin, async (request, response) => {

@@ -21,7 +21,7 @@
     "build": "npm run build:shared && npm run build:api && npm run build:web",
     "start": "npm --workspace @home-memory/api run start",
     "lint": "eslint apps packages features",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,css,html}\" \"packages/**/*.{ts,json}\" \"features/steps/*.mjs\" \"scripts/*.mjs\" docker-compose.yml package.json eslint.config.js tsconfig.test.json vitest.config.ts .github/workflows/ci.yml",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,css,html}\" \"packages/**/*.{ts,json}\" \"features/steps/*.mjs\" \"scripts/*.mjs\" docker-compose.yml package.json eslint.config.js tsconfig.test.json vitest.config.ts .github/workflows/*.yml",
     "typecheck": "npm run build:shared && npm run typecheck --workspace @home-memory/api && npm run typecheck --workspace @home-memory/web && tsc -p tsconfig.test.json --noEmit",
     "test:unit": "vitest run --project api-unit",
     "pretest:unit": "npm run build:shared && npm run build:api",
@@ -31,8 +31,9 @@
     "test:bdd": "cucumber-js --import features/steps/*.mjs features/*.feature",
     "pretest:bdd": "npm run build:shared && npm run build:api",
     "test:providers:live": "npm run build:shared && npm run build:api && node scripts/provider-smoke.mjs",
-    "test": "npm run test:unit && npm run test:integration && npm run test:ui && npm run test:bdd",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "test:release": "node --test scripts/set-version.test.mjs",
+    "test": "npm run test:unit && npm run test:integration && npm run test:ui && npm run test:bdd && npm run test:release",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@home-memory/shared": "*"

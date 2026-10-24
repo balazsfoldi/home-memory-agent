@@ -3,7 +3,7 @@
 ## Docker Compose
 
 Use Node.js 22.13 or newer for local development; Docker supplies its
-own runtime. From the project root:
+own runtime. From the project root, build the source image:
 
 ```sh
 cp .env.example .env
@@ -15,6 +15,19 @@ host loopback. The container listens internally on port 3000, runs as
 the unprivileged `node` user, drops Linux capabilities, and stores memory and
 automation SQLite databases in the named `home-memory-data` volume. `/api/health`
 checks readiness without calling a model provider.
+
+For a released image on a Raspberry Pi, pull the published multi-platform
+image and recreate the app without building source:
+
+```sh
+docker compose pull home-memory-agent
+docker compose up -d --no-build home-memory-agent
+```
+
+The published image is `ghcr.io/balazsfoldi/home-memory-agent:latest`.
+The SQLite databases stay in the `home-memory-data` named volume when the
+container is replaced. The [release process](release-process.md) documents an
+optional host `systemd` timer that checks for updates every 15 minutes.
 
 To restart after changing `.env`, run `docker compose up -d --build`.
 `docker compose down` stops the app while keeping its volume. Deleting

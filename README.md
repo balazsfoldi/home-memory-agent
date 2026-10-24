@@ -24,8 +24,8 @@ memories to your preferred LLM when needed.
 The current application version is **v0.5.0**. The project is under active
 development and is not yet recommended for production use.
 
-See the [v0.5.0 release notes](docs/v0.5.0.md) for persistent scheduled and
-event-triggered automations, retry handling, run history, and local notifications.
+See [GitHub Releases](https://github.com/balazsfoldi/home-memory-agent/releases)
+for release notes.
 
 ## Quick start
 
@@ -80,6 +80,9 @@ the SQLite database before moving or resetting the deployment.
   paraphrases within the same category and asks the user to review them.
 - Memory priorities (low, normal, high) that influence which relevant memories
   are sent to the assistant first.
+- Import and export memories as portable JSON from the memory manager. Imports
+  accept a file or pasted text, preserve archive and expiry details, and skip
+  existing duplicates.
 - A SQLite store with one-time import of existing JSON memories, local
   embedding storage, expiry, and archive/restore controls.
 - Local lexical search by default and semantic ranking when an embedding
@@ -123,6 +126,8 @@ an LLM service or use an API key. `npm run test:providers:live` is a
 separate, explicit smoke test for an LLM already configured in `.env`.
 See [docs/development.md](docs/development.md) for the TDD/BDD workflow
 and [docs/deployment.md](docs/deployment.md) for backups and recovery.
+See [docs/release-process.md](docs/release-process.md) to prepare a release,
+protect `main`, and enable automatic Raspberry Pi updates.
 
 ## Privacy and network access
 
