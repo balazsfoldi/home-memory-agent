@@ -8,6 +8,9 @@ import {
   apiErrorSchema,
   chatResponseSchema,
   memoryEnvelopeSchema,
+  memoryExportDocumentSchema,
+  memoryImportDocumentSchema,
+  memoryImportResponseSchema,
   memoryListResponseSchema,
   settingsResponseSchema,
   type CreateMemoryInput,
@@ -17,6 +20,8 @@ import {
   type AutomationRun,
   type MemoryAction,
   type MemoryEnvelope,
+  type MemoryExportDocument,
+  type MemoryImportResponse,
   type MemoryListResponse,
   type SettingsResponse,
   type UpdateMemoryInput,
@@ -184,6 +189,40 @@ export const api = {
     if (filter.view) query.set('view', filter.view);
     const response = await request(`/api/memories${query.size ? `?${query}` : ''}`);
     const result = memoryListResponseSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'A szerver érvénytelen adatot adott vissza.',
+      );
+    return result.data;
+  },
+
+  async exportMemories(): Promise<MemoryExportDocument> {
+    const response = await request('/api/memories/export');
+    const result = memoryExportDocumentSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'A szerver érvénytelen adatot adott vissza.',
+      );
+    return result.data;
+  },
+
+  async importMemories(document: unknown): Promise<MemoryImportResponse> {
+    const input = memoryImportDocumentSchema.safeParse(document);
+    if (!input.success)
+      throw new ApiClientError(
+        400,
+        'INVALID_INPUT',
+        'Az importfájl nem megfelelő. Ellenőrizd a Home Memory Agent JSON-formátumát.',
+      );
+    const response = await request('/api/memories/import', {
+      method: 'POST',
+      body: JSON.stringify(input.data),
+    });
+    const result = memoryImportResponseSchema.safeParse(await response.json());
     if (!result.success)
       throw new ApiClientError(
         502,

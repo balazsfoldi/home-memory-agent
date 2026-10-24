@@ -66,6 +66,109 @@ describe('memory and chat API', () => {
     expect(updated.headers.etag).not.toBe(created.headers.etag);
   });
 
+  it('exports every memory and imports validated entries while skipping duplicates', async () => {
+    runtime = await createTestRuntime();
+    const existing = await request(runtime.app)
+      .post('/api/memories')
+      .send({ category: 'Travel', content: 'I prefer quiet places close to nature.' })
+      .expect(201);
+    const createdAt = '2026-09-01T08:00:00.000Z';
+    const updatedAt = '2026-09-12T08:00:00.000Z';
+    const archivedId = '22222222-2222-4222-8222-222222222222';
+
+    const imported = await request(runtime.app)
+      .post('/api/memories/import')
+      .send({
+        format: 'home-memory-agent',
+        version: 1,
+        memories: [
+          {
+            category: 'Travel',
+            content: 'I prefer quiet places close to nature.',
+            priority: 'normal',
+          },
+          {
+            category: 'Home',
+            content: 'I keep a spare key with my neighbor.',
+            priority: 'high',
+            expiresAt: null,
+          },
+          {
+            id: archivedId,
+            category: 'Food',
+            content: 'I do not eat shellfish.',
+            priority: 'normal',
+            createdAt,
+            updatedAt,
+            expiresAt: null,
+            archivedAt: updatedAt,
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(imported.body).toEqual({ imported: 2, skipped: 1 });
+    const exported = await request(runtime.app).get('/api/memories/export').expect(200);
+    expect(exported.body).toMatchObject({
+      format: 'home-memory-agent',
+      version: 1,
+    });
+    expect(exported.body.exportedAt).toEqual(expect.any(String));
+    expect(exported.body.memories).toHaveLength(3);
+    expect(exported.body.memories).toContainEqual(
+      expect.objectContaining({
+        id: existing.body.memory.id,
+        category: 'Travel',
+        content: 'I prefer quiet places close to nature.',
+      }),
+    );
+    expect(exported.body.memories).toContainEqual(
+      expect.objectContaining({
+        id: archivedId,
+        createdAt,
+        updatedAt,
+        archivedAt: updatedAt,
+      }),
+    );
+    await request(runtime.app).post('/api/memories/import').send(exported.body).expect(200, {
+      imported: 0,
+      skipped: 3,
+    });
+  });
+
+  it('rejects an invalid memory import without committing any entries', async () => {
+    runtime = await createTestRuntime();
+    await request(runtime.app)
+      .post('/api/memories/import')
+      .send({
+        format: 'home-memory-agent',
+        version: 1,
+        memories: [
+          { category: 'Travel', content: 'Valid memory.' },
+          { category: '', content: 'Invalid memory.' },
+        ],
+      })
+      .expect(400)
+      .expect(({ body }) => expect(body.error.code).toBe('INVALID_INPUT'));
+    await request(runtime.app)
+      .get('/api/memories?view=all')
+      .expect(200)
+      .expect(({ body }) => expect(body.total).toBe(0));
+  });
+
+  it('accepts multi-memory JSON imports larger than the regular API body limit', async () => {
+    runtime = await createTestRuntime();
+    const memories = Array.from({ length: 20 }, (_, index) => ({
+      category: 'Personal notes',
+      content: `Unique note ${String(index).padStart(3, '0')} ${'🧭'.repeat(900)}`,
+    }));
+    const response = await request(runtime.app)
+      .post('/api/memories/import')
+      .send({ format: 'home-memory-agent', version: 1, memories })
+      .expect(200);
+    expect(response.body).toEqual({ imported: 20, skipped: 0 });
+  });
+
   it('runs only enabled read-only tools and keeps tool output out of persistent chat history', async () => {
     runtime = await createTestRuntime({ agentTools: ['notes.search'] });
     const settings = await request(runtime.app).get('/api/settings').expect(200);

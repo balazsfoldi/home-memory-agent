@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   createMemoryInputSchema,
+  MEMORY_TRANSFER_FORMAT,
+  MEMORY_TRANSFER_VERSION,
   type CreateMemoryInput,
+  type MemoryImportDocument,
   type Memory,
   type UpdateMemoryInput,
   updateMemoryInputSchema,
@@ -187,6 +190,69 @@ export class MemoryService {
     const memory = await this.repository.findById(id);
     if (!memory) throw notFoundError();
     return { memory, etag: memoryEtag(memory) };
+  }
+
+  async exportAll(): Promise<{
+    format: typeof MEMORY_TRANSFER_FORMAT;
+    version: typeof MEMORY_TRANSFER_VERSION;
+    exportedAt: string;
+    memories: Memory[];
+  }> {
+    const memories = await this.repository.list();
+    memories.sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    );
+    return {
+      format: MEMORY_TRANSFER_FORMAT,
+      version: MEMORY_TRANSFER_VERSION,
+      exportedAt: this.now().toISOString(),
+      memories,
+    };
+  }
+
+  async importMany(
+    document: MemoryImportDocument,
+  ): Promise<{ imported: number; skipped: number }> {
+    const result = await this.repository.transaction((transaction) => {
+      let importedCount = 0;
+      let skippedCount = 0;
+      const importedMemories: Memory[] = [];
+      for (const entry of document.memories) {
+        const duplicate = findMemoryDuplicate(transaction.list(), entry);
+        if (duplicate) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const now = this.now().toISOString();
+        const isFullMemory = 'id' in entry;
+        const existingId = isFullMemory ? transaction.findById(entry.id) : null;
+        const memory: Memory = {
+          id: isFullMemory && !existingId ? entry.id : this.idFactory(),
+          category: entry.category,
+          content: entry.content,
+          priority: entry.priority,
+          createdAt: isFullMemory ? entry.createdAt : now,
+          updatedAt: isFullMemory ? entry.updatedAt : now,
+          expiresAt: entry.expiresAt ?? null,
+          archivedAt: entry.archivedAt ?? null,
+        };
+        transaction.create(memory);
+        importedMemories.push(memory);
+        importedCount += 1;
+      }
+      return { imported: importedCount, skipped: skippedCount, importedMemories };
+    });
+
+    for (const memory of result.importedMemories) {
+      void this.search.index(memory);
+      await this.publishEvent({
+        type: 'memory.created',
+        memoryId: memory.id,
+        occurredAt: this.now().toISOString(),
+      });
+    }
+    return { imported: result.imported, skipped: result.skipped };
   }
 
   async create(input: CreateMemoryInput): Promise<MemoryEnvelope> {

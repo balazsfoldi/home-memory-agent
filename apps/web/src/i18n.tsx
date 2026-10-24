@@ -124,6 +124,39 @@ const english: Record<string, string> = {
   'Hiba bezárása': 'Dismiss error',
   'Értesítés bezárása': 'Dismiss notification',
   'A TE PRIVÁT TÁRAD': 'YOUR PRIVATE MEMORY STORE',
+  'Memóriák importálása': 'Import memories',
+  'Memóriák exportálása': 'Export memories',
+  'Tölts fel egy JSON-fájlt, vagy illeszd be az emlékeidet a megadott formátumban.':
+    'Upload a JSON file or paste your memories in the supported format.',
+  'JSON-fájl kiválasztása': 'Choose JSON file',
+  'Vagy illeszd be a JSON-t': 'Or paste JSON',
+  'Megnézem a támogatott JSON-formátumot': 'View the supported JSON format',
+  'A kategória és a szöveg kötelező. A prioritás, lejárat és archiválás opcionális.':
+    'Category and content are required. Priority, expiration, and archive status are optional.',
+  'Az import legfeljebb 500 emléket kezel egyszerre. A meglévő egyezéseket kihagyjuk.':
+    'You can import up to 500 memories at a time. Existing duplicates are skipped.',
+  'A bemásolt szöveg nem érvényes JSON.': 'The pasted text is not valid JSON.',
+  'Az importfájl nem megfelelő. Ellenőrizd a Home Memory Agent JSON-formátumát.':
+    'The import file is invalid. Check that it uses the Home Memory Agent JSON format.',
+  'Az importfájl nem megfelelő. Használd a Home Memory Agent JSON-formátumát; legfeljebb 500 emlék tölthető fel egyszerre.':
+    'The import file is invalid. Use the Home Memory Agent JSON format; up to 500 memories can be imported at a time.',
+  'Az importálás nem sikerült. Ellenőrizd a fájl tartalmát.':
+    'The import failed. Check the file contents and try again.',
+  'Az exportálás nem sikerült.': 'The export could not be loaded.',
+  'A kiválasztott fájlt nem sikerült beolvasni.': 'The selected file could not be read.',
+  'A teljes memórialistát JSON-formátumban másolhatod vagy töltheted le.':
+    'Copy or download your complete memory list as JSON.',
+  'Exportált memóriák JSON-formátuma': 'Exported memories in JSON format',
+  'Az exportot a vágólapra másoltuk.': 'The export was copied to your clipboard.',
+  'A másolás nem sikerült. Jelöld ki és másold ki a szöveget.':
+    'Copy failed. Select and copy the text manually.',
+  'Az exportfájl letöltése elindult.': 'Your export download has started.',
+  Importálás: 'Import',
+  Exportálás: 'Export',
+  'Feldolgozás…': 'Processing…',
+  Másolás: 'Copy',
+  'Letöltés JSON-ként': 'Download JSON',
+  memoryImportResult: 'Imported {imported} memories; skipped {skipped} duplicates.',
   Memóriák: 'Memories',
   Bezárás: 'Close',
   'Új emlék': 'New memory',
@@ -395,6 +428,7 @@ const hungarian: Record<string, string> = {
   usedMemories: '{count} emléket vettem figyelembe',
   memoryEditLabel: 'Emlék szerkesztése: {category}',
   memoryDeleteLabel: 'Emlék törlése: {category}',
+  memoryImportResult: 'Importálás kész: {imported} új emlék, {skipped} egyező kihagyva.',
 };
 
 interface LanguageContextValue {

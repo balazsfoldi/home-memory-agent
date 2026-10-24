@@ -30,6 +30,50 @@ export const memorySchema = z
 
 export type Memory = z.infer<typeof memorySchema>;
 
+export const MEMORY_TRANSFER_FORMAT = 'home-memory-agent' as const;
+export const MEMORY_TRANSFER_VERSION = 1 as const;
+export const MAX_MEMORY_IMPORT_COUNT = 500;
+
+export const memoryTransferInputSchema = z
+  .object({
+    category: z.string().trim().min(1).max(MEMORY_CATEGORY_MAX_LENGTH),
+    content: z.string().trim().min(1).max(MEMORY_CONTENT_MAX_LENGTH),
+    priority: memoryPrioritySchema.default('normal'),
+    expiresAt: z.iso.datetime().nullable().optional(),
+    archivedAt: z.iso.datetime().nullable().optional(),
+  })
+  .strict();
+
+export const memoryTransferEntrySchema = z.union([memorySchema, memoryTransferInputSchema]);
+
+export const memoryImportDocumentSchema = z
+  .object({
+    format: z.literal(MEMORY_TRANSFER_FORMAT),
+    version: z.literal(MEMORY_TRANSFER_VERSION),
+    exportedAt: z.iso.datetime().optional(),
+    memories: z.array(memoryTransferEntrySchema).max(MAX_MEMORY_IMPORT_COUNT),
+  })
+  .strict();
+export type MemoryImportDocument = z.infer<typeof memoryImportDocumentSchema>;
+
+export const memoryExportDocumentSchema = z
+  .object({
+    format: z.literal(MEMORY_TRANSFER_FORMAT),
+    version: z.literal(MEMORY_TRANSFER_VERSION),
+    exportedAt: z.iso.datetime(),
+    memories: z.array(memorySchema),
+  })
+  .strict();
+export type MemoryExportDocument = z.infer<typeof memoryExportDocumentSchema>;
+
+export const memoryImportResponseSchema = z
+  .object({
+    imported: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+  })
+  .strict();
+export type MemoryImportResponse = z.infer<typeof memoryImportResponseSchema>;
+
 export const createMemoryInputSchema = z
   .object({
     category: z.string().trim().min(1).max(MEMORY_CATEGORY_MAX_LENGTH),

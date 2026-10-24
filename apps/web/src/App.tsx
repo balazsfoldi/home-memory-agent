@@ -21,6 +21,7 @@ import type {
   SettingsResponse,
 } from '@home-memory/shared';
 import { ApiClientError, api } from './api/client.js';
+import { MemoryTransferDialog, type MemoryTransferMode } from './MemoryTransferDialog.js';
 import { LanguageProvider, useI18n } from './i18n.js';
 
 type Page = 'chat' | 'memories' | 'automations' | 'settings';
@@ -252,6 +253,9 @@ function AppContent() {
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
   const [memoryView, setMemoryView] = useState<MemoryView>('active');
+  const [memoryTransferMode, setMemoryTransferMode] = useState<MemoryTransferMode | null>(
+    null,
+  );
   const [chatMessages, setChatMessages] = useState<ChatEntry[]>([]);
   const [chatText, setChatText] = useState('');
   const [sending, setSending] = useState(false);
@@ -462,6 +466,22 @@ function AppContent() {
     await loadMemories(search.trim() || undefined, memoryView);
     setNotice(message);
     setError('');
+  }
+
+  async function handleMemoriesImported(result: {
+    imported: number;
+    skipped: number;
+  }): Promise<void> {
+    if (result.imported > 0) clearConversationAfterMutation();
+    try {
+      await loadMemories(search.trim() || undefined, memoryView);
+      setError('');
+    } catch (failure) {
+      setError(
+        t(failure instanceof Error ? failure.message : 'Nem sikerült betölteni az emlékeket.'),
+      );
+    }
+    setNotice(t('memoryImportResult', result));
   }
 
   async function acceptProposal(entry: ChatEntry): Promise<void> {
@@ -727,13 +747,27 @@ function AppContent() {
                     {t('Memóriák')} <span className="total-pill">{memoryTotal}</span>
                   </h2>
                 </div>
-                <button
-                  className="button button-primary"
-                  onClick={() => setCreating((value) => !value)}
-                >
-                  <Icon name={creating ? 'close' : 'plus'} size={17} />
-                  {creating ? t('Bezárás') : t('Új emlék')}
-                </button>
+                <div className="memory-toolbar-actions">
+                  <button
+                    className="button button-quiet"
+                    onClick={() => setMemoryTransferMode('import')}
+                  >
+                    {t('Importálás')}
+                  </button>
+                  <button
+                    className="button button-quiet"
+                    onClick={() => setMemoryTransferMode('export')}
+                  >
+                    {t('Exportálás')}
+                  </button>
+                  <button
+                    className="button button-primary"
+                    onClick={() => setCreating((value) => !value)}
+                  >
+                    <Icon name={creating ? 'close' : 'plus'} size={17} />
+                    {creating ? t('Bezárás') : t('Új emlék')}
+                  </button>
+                </div>
               </div>
 
               {creating && (
@@ -844,6 +878,13 @@ function AppContent() {
           <span>{t('Önálló, helyi és a tiéd.')}</span>
         </footer>
       </main>
+      {memoryTransferMode && (
+        <MemoryTransferDialog
+          mode={memoryTransferMode}
+          onClose={() => setMemoryTransferMode(null)}
+          onImported={handleMemoriesImported}
+        />
+      )}
     </div>
   );
 }

@@ -26,6 +26,47 @@ describe('Home Memory web interface', () => {
     reportedTools = [];
     fetcher.mockReset().mockImplementation(async (input, init) => {
       const url = String(input);
+      if (url === '/api/memories/export') {
+        return new Response(
+          JSON.stringify({
+            format: 'home-memory-agent',
+            version: 1,
+            exportedAt: '2026-10-21T18:00:00.000Z',
+            memories,
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/memories/import' && init?.method === 'POST') {
+        const document = JSON.parse(String(init.body)) as {
+          memories: Array<{
+            category: string;
+            content: string;
+            priority?: 'low' | 'normal' | 'high';
+          }>;
+        };
+        let imported = 0;
+        let skipped = 0;
+        for (const item of document.memories) {
+          if (
+            memories.some(
+              (stored) => stored.category === item.category && stored.content === item.content,
+            )
+          ) {
+            skipped += 1;
+            continue;
+          }
+          memories.push({
+            ...memory,
+            id: `11111111-1111-4111-8111-${String(memories.length + 1).padStart(12, '0')}`,
+            category: item.category,
+            content: item.content,
+            priority: item.priority ?? 'normal',
+          });
+          imported += 1;
+        }
+        return new Response(JSON.stringify({ imported, skipped }), { status: 200 });
+      }
       if (url === '/api/settings') {
         return new Response(
           JSON.stringify({
@@ -226,6 +267,116 @@ describe('Home Memory web interface', () => {
         ([input, init]) => String(input) === '/api/memories' && init?.method === 'POST',
       ),
     ).toBe(true);
+  });
+
+  it('imports pasted JSON and adds the validated memories to the list', async () => {
+    await renderHungarian();
+    fireEvent.click(screen.getByRole('button', { name: /Emlékeim/u }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Importálás' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Memóriák importálása' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Vagy illeszd be a JSON-t' }), {
+      target: {
+        value: JSON.stringify({
+          format: 'home-memory-agent',
+          version: 1,
+          memories: [{ category: 'Utazás', content: 'Szeretem a csendes túraútvonalakat.' }],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Memóriák importálása' }));
+
+    expect(await screen.findByText('Szeretem a csendes túraútvonalakat.')).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Importálás kész: 1 új emlék, 0 egyező kihagyva.',
+    );
+    expect(
+      fetcher.mock.calls.some(
+        ([input, init]) => String(input) === '/api/memories/import' && init?.method === 'POST',
+      ),
+    ).toBe(true);
+  });
+
+  it('loads an uploaded JSON file into the import form', async () => {
+    await renderHungarian();
+    fireEvent.click(screen.getByRole('button', { name: /Emlékeim/u }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Importálás' }));
+    const contents = JSON.stringify({
+      format: 'home-memory-agent',
+      version: 1,
+      memories: [{ category: 'Otthon', content: 'Szeretem a csendet reggel.' }],
+    });
+    const file = new File([contents], 'memories.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: async () => contents });
+
+    fireEvent.change(screen.getByLabelText('JSON-fájl kiválasztása'), {
+      target: { files: [file] },
+    });
+    expect(
+      await screen.findByRole('textbox', { name: 'Vagy illeszd be a JSON-t' }),
+    ).toHaveValue(contents);
+  });
+
+  it('shows a copyable JSON export of the complete memory list', async () => {
+    memories = [memory];
+    await renderHungarian();
+    fireEvent.click(screen.getByRole('button', { name: /Emlékeim/u }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportálás' }));
+
+    const exportField = await screen.findByRole('textbox', {
+      name: 'Exportált memóriák JSON-formátuma',
+    });
+    expect((exportField as HTMLTextAreaElement).value).toContain(memory.content);
+    expect((exportField as HTMLTextAreaElement).value).toContain('home-memory-agent');
+    expect(screen.getByRole('button', { name: 'Másolás' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Letöltés JSON-ként' })).toBeEnabled();
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Másolás' }));
+      expect(await screen.findByText('Az exportot a vágólapra másoltuk.')).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith((exportField as HTMLTextAreaElement).value);
+    } finally {
+      if (clipboardDescriptor)
+        Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+
+    const createUrlDescriptor = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const revokeUrlDescriptor = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    const createObjectURL = vi.fn(() => 'blob:memory-export');
+    const revokeObjectURL = vi.fn();
+    const clickLink = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Letöltés JSON-ként' }));
+      expect(await screen.findByText('Az exportfájl letöltése elindult.')).toBeInTheDocument();
+      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+      expect(clickLink).toHaveBeenCalledOnce();
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:memory-export');
+    } finally {
+      clickLink.mockRestore();
+      if (createUrlDescriptor)
+        Object.defineProperty(URL, 'createObjectURL', createUrlDescriptor);
+      else Reflect.deleteProperty(URL, 'createObjectURL');
+      if (revokeUrlDescriptor)
+        Object.defineProperty(URL, 'revokeObjectURL', revokeUrlDescriptor);
+      else Reflect.deleteProperty(URL, 'revokeObjectURL');
+    }
   });
 
   it('explains that the memory list works while the assistant awaits a provider', async () => {
