@@ -1,10 +1,20 @@
 import {
+  automationListResponseSchema,
+  automationNotificationListResponseSchema,
+  automationNotificationSchema,
+  automationRunListResponseSchema,
+  automationRunSchema,
+  automationSchema,
   apiErrorSchema,
   chatResponseSchema,
   memoryEnvelopeSchema,
   memoryListResponseSchema,
   settingsResponseSchema,
   type CreateMemoryInput,
+  type CreateAutomationInput,
+  type Automation,
+  type AutomationNotification,
+  type AutomationRun,
   type MemoryAction,
   type MemoryEnvelope,
   type MemoryListResponse,
@@ -63,6 +73,104 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 }
 
 export const api = {
+  async listAutomations(): Promise<Automation[]> {
+    const response = await request('/api/automations');
+    const result = automationListResponseSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data.items;
+  },
+
+  async createAutomation(input: CreateAutomationInput): Promise<Automation> {
+    const response = await request('/api/automations', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    const result = automationSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data;
+  },
+
+  async setAutomationStatus(id: string, status: 'active' | 'paused'): Promise<Automation> {
+    const response = await request(`/api/automations/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    const result = automationSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data;
+  },
+
+  async deleteAutomation(id: string): Promise<void> {
+    await request(`/api/automations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  async runAutomationNow(id: string): Promise<AutomationRun> {
+    const response = await request(`/api/automations/${encodeURIComponent(id)}/run-now`, {
+      method: 'POST',
+    });
+    const result = automationRunSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data;
+  },
+
+  async automationRuns(id: string): Promise<AutomationRun[]> {
+    const response = await request(`/api/automations/${encodeURIComponent(id)}/runs`);
+    const result = automationRunListResponseSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data.items;
+  },
+
+  async notifications(): Promise<{ items: AutomationNotification[]; unread: number }> {
+    const response = await request('/api/notifications');
+    const result = automationNotificationListResponseSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data;
+  },
+
+  async markNotificationRead(id: string): Promise<AutomationNotification> {
+    const response = await request(`/api/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'POST',
+    });
+    const result = automationNotificationSchema.safeParse(await response.json());
+    if (!result.success)
+      throw new ApiClientError(
+        502,
+        'INVALID_SERVER_RESPONSE',
+        'The server returned invalid data.',
+      );
+    return result.data;
+  },
+
   async listMemories(
     filter: {
       q?: string;

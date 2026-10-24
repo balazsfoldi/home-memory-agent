@@ -10,6 +10,11 @@ import {
   type RefObject,
 } from 'react';
 import type {
+  Automation,
+  AutomationNotification,
+  AutomationRun,
+  AutomationTrigger,
+  CreateAutomationInput,
   MemoryAction,
   MemoryEnvelope,
   MemoryListResponse,
@@ -18,7 +23,7 @@ import type {
 import { ApiClientError, api } from './api/client.js';
 import { LanguageProvider, useI18n } from './i18n.js';
 
-type Page = 'chat' | 'memories' | 'settings';
+type Page = 'chat' | 'memories' | 'automations' | 'settings';
 type MemoryView = 'active' | 'archived' | 'expired' | 'all';
 type ChatEntry = {
   id: string;
@@ -83,7 +88,8 @@ function Icon({
     | 'moon'
     | 'refresh'
     | 'archive'
-    | 'restore';
+    | 'restore'
+    | 'automation';
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -199,6 +205,12 @@ function Icon({
         <path d="M5.6 9a7 7 0 0 1 11.5-2L20 12M4 12l2.9 5a7 7 0 0 0 11.5-2" />
       </>
     ),
+    automation: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7v5l3.5 2M12 2v2M22 12h-2" />
+      </>
+    ),
   };
   return (
     <svg
@@ -267,6 +279,13 @@ function AppContent() {
       title: t('A saját tárhelyeden.'),
       description: t(
         'Az emlékeid az otthoni szerveren maradnak. Te döntöd el, hová küldesz belőlük a válaszaidhoz.',
+      ),
+    },
+    automations: {
+      eyebrow: t('A TE SZABÁLYAID SZERINT'),
+      title: t('Feladatok, amelyek maguktól elindulnak.'),
+      description: t(
+        'Ütemezz ismétlődő feladatokat, vagy indítsd őket egy új emlék létrejöttekor.',
       ),
     },
   };
@@ -557,6 +576,7 @@ function AppContent() {
             [
               ['chat', t('Beszélgetés'), 'chat'],
               ['memories', t('Emlékeim'), 'memory'],
+              ['automations', t('Automatizálások'), 'automation'],
               ['settings', t('Beállítások'), 'settings'],
             ] as const
           ).map(([id, label, icon]) => (
@@ -604,7 +624,7 @@ function AppContent() {
         <div className="sidebar-footer">
           <span className="footer-avatar">H</span>
           <span>Home Memory Agent</span>
-          <span className="version-tag">v0.4</span>
+          <span className="version-tag">v0.5</span>
         </div>
       </aside>
 
@@ -614,11 +634,15 @@ function AppContent() {
             <span>{t('Otthon')}</span>
             <span className="breadcrumb-slash">/</span>
             <strong>
-              {page === 'chat'
-                ? t('Beszélgetés')
-                : page === 'memories'
-                  ? t('Emlékeim')
-                  : t('Beállítások')}
+              {t(
+                page === 'chat'
+                  ? 'Beszélgetés'
+                  : page === 'memories'
+                    ? 'Emlékeim'
+                    : page === 'automations'
+                      ? 'Automatizálások'
+                      : 'Beállítások',
+              )}
             </strong>
           </div>
           <div className="topbar-status">
@@ -809,6 +833,10 @@ function AppContent() {
               memoryTotal={memoryTotal}
               onRefresh={() => void refresh()}
             />
+          )}
+
+          {page === 'automations' && (
+            <AutomationsPanel configured={settings?.configured ?? false} />
           )}
         </div>
         <footer className="page-footer">
@@ -1777,6 +1805,418 @@ function SettingsPanel({
           </div>
         </article>
       </aside>
+    </section>
+  );
+}
+
+function AutomationsPanel({ configured }: { configured: boolean }) {
+  const { language, t } = useI18n();
+  const [items, setItems] = useState<Automation[]>([]);
+  const [runs, setRuns] = useState<Record<string, AutomationRun[]>>({});
+  const [notifications, setNotifications] = useState<AutomationNotification[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [name, setName] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [triggerType, setTriggerType] = useState<AutomationTrigger['type']>('interval');
+  const [intervalMinutes, setIntervalMinutes] = useState(60);
+
+  const load = useCallback(async () => {
+    try {
+      const [automations, noticeResult] = await Promise.all([
+        api.listAutomations(),
+        api.notifications(),
+      ]);
+      const runEntries = await Promise.all(
+        automations.map(
+          async (automation) =>
+            [automation.id, await api.automationRuns(automation.id)] as const,
+        ),
+      );
+      setItems(automations);
+      setRuns(Object.fromEntries(runEntries));
+      setNotifications(noticeResult.items);
+      setUnread(noticeResult.unread);
+      setError('');
+    } catch (failure) {
+      setError(
+        t(
+          failure instanceof Error
+            ? failure.message
+            : 'Az automatizálások betöltése nem sikerült.',
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const trigger: AutomationTrigger =
+        triggerType === 'interval'
+          ? { type: 'interval', intervalMinutes }
+          : { type: triggerType };
+      const input: CreateAutomationInput = { name, prompt, trigger };
+      await api.createAutomation(input);
+      setName('');
+      setPrompt('');
+      setNotice(t('Az automatizálás létrejött.'));
+      await load();
+    } catch (failure) {
+      setError(
+        t(
+          failure instanceof Error
+            ? failure.message
+            : 'Az automatizálást nem sikerült menteni.',
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runNow(automation: Automation): Promise<void> {
+    setError('');
+    try {
+      await api.runAutomationNow(automation.id);
+      setNotice(t('A feladat sorba került.'));
+      await load();
+    } catch (failure) {
+      setError(t(failure instanceof Error ? failure.message : 'A futtatás nem sikerült.'));
+    }
+  }
+
+  async function changeStatus(automation: Automation): Promise<void> {
+    setError('');
+    try {
+      await api.setAutomationStatus(
+        automation.id,
+        automation.status === 'active' ? 'paused' : 'active',
+      );
+      await load();
+    } catch (failure) {
+      setError(
+        t(failure instanceof Error ? failure.message : 'Az állapot módosítása nem sikerült.'),
+      );
+    }
+  }
+
+  async function deleteAutomation(automation: Automation): Promise<void> {
+    if (!window.confirm(t('Biztosan törlöd ezt az automatizálást és az előzményeit?'))) return;
+    setError('');
+    try {
+      await api.deleteAutomation(automation.id);
+      await load();
+    } catch (failure) {
+      setError(t(failure instanceof Error ? failure.message : 'A törlés nem sikerült.'));
+    }
+  }
+
+  async function markRead(notification: AutomationNotification): Promise<void> {
+    try {
+      await api.markNotificationRead(notification.id);
+      await load();
+    } catch (failure) {
+      setError(
+        t(
+          failure instanceof Error
+            ? failure.message
+            : 'Az értesítést nem sikerült frissíteni.',
+        ),
+      );
+    }
+  }
+
+  const dateFormat = (value: string | null) =>
+    value
+      ? new Intl.DateTimeFormat(language === 'hu' ? 'hu-HU' : 'en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(new Date(value))
+      : t('Még nincs futás');
+
+  function triggerLabel(trigger: AutomationTrigger): string {
+    if (trigger.type === 'interval')
+      return t('Ismétlés minden {minutes} percben', { minutes: trigger.intervalMinutes });
+    return t(
+      trigger.type === 'memory.created' ? 'Új emlék létrehozásakor' : 'Emlék módosításakor',
+    );
+  }
+
+  function runStatus(status: AutomationRun['status']): string {
+    return t(
+      status === 'queued'
+        ? 'Sorban áll'
+        : status === 'running'
+          ? 'Fut'
+          : status === 'succeeded'
+            ? 'Kész'
+            : 'Sikertelen',
+    );
+  }
+
+  return (
+    <section className="automation-panel" aria-label={t('Automatizálások')}>
+      {(error || notice) && (
+        <div
+          className={`alert ${error ? 'alert-error' : 'alert-success'}`}
+          role={error ? 'alert' : 'status'}
+        >
+          <span>{error || notice}</span>
+          <button
+            className="inline-icon"
+            aria-label={t('Értesítés bezárása')}
+            onClick={() => {
+              setError('');
+              setNotice('');
+            }}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+
+      <article className="automation-create-card">
+        <div className="section-kicker">{t('ÚJ FELADAT')}</div>
+        <h2>{t('Hozz létre automatizálást')}</h2>
+        <p>
+          {t(
+            'A feladat olvashat releváns emlékeket és az engedélyezett eszközöket. Emléket nem módosít.',
+          )}
+        </p>
+        {!configured && (
+          <div className="data-note">
+            {t('A futtatáshoz előbb állíts be nyelvi modellt a Beállítások oldalon.')}
+          </div>
+        )}
+        <form className="automation-form" onSubmit={(event) => void submit(event)}>
+          <label>
+            <span>{t('Feladat neve')}</span>
+            <input
+              required
+              maxLength={80}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t('Például: Hétvégi túra előkészítése')}
+            />
+          </label>
+          <label>
+            <span>{t('Mit tegyen az asszisztens?')}</span>
+            <textarea
+              required
+              maxLength={2_000}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              rows={3}
+              placeholder={t(
+                'Például: Ellenőrizd a hétvégi időjárást, és készíts túrafelszerelés-listát.',
+              )}
+            />
+          </label>
+          <div className="automation-trigger-row">
+            <label>
+              <span>{t('Indítás módja')}</span>
+              <select
+                value={triggerType}
+                onChange={(event) =>
+                  setTriggerType(event.target.value as AutomationTrigger['type'])
+                }
+              >
+                <option value="interval">{t('Ismétlődő időzítés')}</option>
+                <option value="memory.created">{t('Új emlék létrejötte')}</option>
+                <option value="memory.updated">{t('Emlék módosítása')}</option>
+              </select>
+            </label>
+            {triggerType === 'interval' && (
+              <label>
+                <span>{t('Ismétlés percenként')}</span>
+                <input
+                  type="number"
+                  min={15}
+                  max={10_080}
+                  step={15}
+                  required
+                  value={intervalMinutes}
+                  onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+                />
+              </label>
+            )}
+          </div>
+          <div className="automation-form-footer">
+            <span>
+              {t('A kérés és a kiválasztott emlékek a beállított modellhez kerülnek.')}
+            </span>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={saving || !configured}
+            >
+              <Icon name="plus" size={16} />
+              {saving ? t('Mentés…') : t('Automatizálás mentése')}
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <article className="automation-section-card">
+        <div className="section-toolbar">
+          <div>
+            <div className="section-kicker">{t('FUTTATÁSI ELŐZMÉNYEK')}</div>
+            <h2>
+              {t('Értesítések')} <span className="total-pill">{unread}</span>
+            </h2>
+          </div>
+        </div>
+        {notifications.length ? (
+          <div className="automation-notifications">
+            {notifications.map((notification) => (
+              <article
+                className={`automation-notice${notification.readAt ? '' : ' unread'}`}
+                key={notification.id}
+              >
+                <span className="automation-notice-dot" />
+                <div>
+                  <strong>{notification.title}</strong>
+                  <p>{notification.message}</p>
+                  <time>{dateFormat(notification.createdAt)}</time>
+                </div>
+                {!notification.readAt && (
+                  <button
+                    className="button button-quiet button-small"
+                    onClick={() => void markRead(notification)}
+                  >
+                    {t('Olvasottnak jelölés')}
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="automation-empty-inline">
+            {t('Még nincs értesítés. A feladatok eredménye itt jelenik meg.')}
+          </p>
+        )}
+      </article>
+
+      <article className="automation-section-card">
+        <div className="section-toolbar">
+          <div>
+            <div className="section-kicker">{t('ÜTEMEZETT FELADATOK')}</div>
+            <h2>
+              {t('Automatizálásaim')} <span className="total-pill">{items.length}</span>
+            </h2>
+          </div>
+        </div>
+        {loading ? (
+          <div className="empty-state">
+            <div className="spinner" />
+            <p>{t('Betöltés…')}</p>
+          </div>
+        ) : items.length ? (
+          <div className="automation-list">
+            {items.map((automation) => (
+              <article className="automation-card" key={automation.id}>
+                <div className="automation-card-main">
+                  <div className="automation-card-icon">
+                    <Icon name="automation" size={18} />
+                  </div>
+                  <div className="automation-card-copy">
+                    <div className="automation-card-title-row">
+                      <h3>{automation.name}</h3>
+                      <span className={`automation-status ${automation.status}`}>
+                        {t(automation.status === 'active' ? 'Aktív' : 'Szüneteltetve')}
+                      </span>
+                    </div>
+                    <span className="automation-trigger-label">
+                      {triggerLabel(automation.trigger)}
+                    </span>
+                    <p>{automation.prompt}</p>
+                    <div className="automation-meta">
+                      <span>
+                        {t('Következő futás')}: {dateFormat(automation.nextRunAt)}
+                      </span>
+                      <span>
+                        {t('Utolsó futás')}: {dateFormat(automation.lastRunAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="automation-actions">
+                    <button
+                      className="button button-primary button-small"
+                      onClick={() => void runNow(automation)}
+                      disabled={!configured}
+                    >
+                      {t('Futtatás most')}
+                    </button>
+                    <button
+                      className="button button-quiet button-small"
+                      onClick={() => void changeStatus(automation)}
+                    >
+                      {t(automation.status === 'active' ? 'Szüneteltetés' : 'Folytatás')}
+                    </button>
+                    <button
+                      className="button button-quiet button-small"
+                      onClick={() => void deleteAutomation(automation)}
+                    >
+                      {t('Törlés')}
+                    </button>
+                  </div>
+                </div>
+                {(runs[automation.id] ?? []).length > 0 && (
+                  <details className="automation-history">
+                    <summary>
+                      {t('Legutóbbi futások')} ({Math.min(runs[automation.id]?.length ?? 0, 5)}
+                      )
+                    </summary>
+                    <div>
+                      {(runs[automation.id] ?? []).slice(0, 5).map((run) => (
+                        <div className="automation-run-row" key={run.id}>
+                          <span className={`run-state ${run.status}`}>
+                            {runStatus(run.status)}
+                          </span>
+                          <span>{dateFormat(run.scheduledFor)}</span>
+                          <span>
+                            {t('Próbálkozás')}: {run.attempt}/3
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-icon">
+              <Icon name="automation" size={24} />
+            </div>
+            <h3>{t('Még nincs automatizálásod.')}</h3>
+            <p>{t('Hozd létre az első időzített vagy eseményvezérelt feladatodat.')}</p>
+          </div>
+        )}
+      </article>
+      <div className="data-note">
+        <Icon name="lock" size={15} />
+        <span>
+          {t(
+            'Az ütemezések, futások és értesítések az automations.sqlite adatbázisban, ezen a szerveren maradnak.',
+          )}
+        </span>
+      </div>
     </section>
   );
 }
