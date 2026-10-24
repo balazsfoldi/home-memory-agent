@@ -21,11 +21,11 @@ memories to your preferred LLM when needed.
 
 🚧 Early development / experimental
 
-The current application version is **v0.4.0**. The project is under active
+The current application version is **v0.5.0**. The project is under active
 development and is not yet recommended for production use.
 
-See the [v0.4.0 release notes](docs/v0.4.0.md) for the permissioned agent
-tools and local calendar support.
+See the [v0.5.0 release notes](docs/v0.5.0.md) for persistent scheduled and
+event-triggered automations, retry handling, run history, and local notifications.
 
 ## Quick start
 
@@ -91,6 +91,9 @@ the SQLite database before moving or resetting the deployment.
   propose natural-language updates or deletion. Every suggested write still
   requires user approval and can be edited before saving.
 - No persistent chat transcript or telemetry.
+- Scheduled and memory-event automations stored in `automations.sqlite`. Tasks
+  can use relevant memories and explicitly enabled read-only tools; results are
+  delivered as local in-app notifications and never write memories automatically.
 - Docker images for `linux/amd64` and `linux/arm64`.
 
 ## Local development

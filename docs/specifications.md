@@ -599,6 +599,19 @@ The agent may invoke these tools based on the current request.
 
 ## v0.5 -- Automation
 
+The user can create and pause tasks that run on a recurring interval or when a
+memory is created or updated. Each run is persisted with its trigger, status,
+attempt count, result, and completion time. A manual “run now” action uses the
+same queue. The scheduler deduplicates each scheduled occurrence and retries a
+failed run up to three times with bounded backoff. Final success or failure
+creates one in-app notification that can be marked as read.
+
+An automation may use up to five relevant active memories and only the
+read-only tools individually enabled by the user. It must never write or delete
+memories. Task prompts, selected memories, and tool results follow the same
+external-provider disclosure as chat. Automation records, run history, and
+notifications remain in the local data directory and require a backup.
+
 Example:
 
 > I am going hiking tomorrow.

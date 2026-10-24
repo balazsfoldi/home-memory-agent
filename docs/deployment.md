@@ -12,8 +12,8 @@ docker compose up -d --build
 
 The app is available at `http://127.0.0.1:3000`. Compose binds only to
 host loopback. The container listens internally on port 3000, runs as
-the unprivileged `node` user, drops Linux capabilities, and stores the
-SQLite database in the named `home-memory-data` volume. `/api/health`
+the unprivileged `node` user, drops Linux capabilities, and stores memory and
+automation SQLite databases in the named `home-memory-data` volume. `/api/health`
 checks readiness without calling a model provider.
 
 To restart after changing `.env`, run `docker compose up -d --build`.
@@ -105,6 +105,8 @@ the first import from starting; the app does not replace it with an empty
 store. After import, `memories.sqlite` is the active source of truth.
 The optional `MEMORY_STORE=json` mode continues to read and write the
 legacy JSON file; it does not synchronize with an existing SQLite store.
+Automation definitions, runs, and notifications continue to use
+`automations.sqlite` in either memory-store mode.
 
 ## Back up and restore
 
@@ -116,6 +118,7 @@ information.
 mkdir -p data/backups
 docker compose stop home-memory-agent
 docker compose cp home-memory-agent:/app/data/memories.sqlite ./data/backups/memories.sqlite
+docker compose cp home-memory-agent:/app/data/automations.sqlite ./data/backups/automations.sqlite
 docker compose start home-memory-agent
 ```
 
@@ -125,6 +128,7 @@ start it again:
 ```sh
 docker compose stop home-memory-agent
 docker compose cp ./data/backups/memories.sqlite home-memory-agent:/app/data/memories.sqlite
+docker compose cp ./data/backups/automations.sqlite home-memory-agent:/app/data/automations.sqlite
 docker compose start home-memory-agent
 ```
 
@@ -133,6 +137,23 @@ web app. Retain the unmodified `memories.json` migration snapshot until
 the SQLite backup has been checked. Backups are outside the app's
 deletion behavior, as is information already sent to an external model
 endpoint.
+
+## Automations
+
+The Automations page supports recurring intervals from 15 minutes to one week,
+plus triggers when a memory is created or updated. The API queues work in
+`automations.sqlite`; one occurrence has one idempotency key, and failures are
+retried up to three times with backoff. Results and terminal failures create
+local in-app notifications. The scheduler runs inside the API process, so the
+service must stay running for scheduled work to start. When it restarts, queued
+and interrupted runs are recovered from the database.
+
+Tasks can use relevant active memories and the same explicitly enabled,
+read-only tools as chat. Their prompts, selected memories, and tool results may
+be sent to the configured LLM or external tool service. Review `AGENT_TOOLS`
+and the provider settings before enabling an automation. A run never writes or
+deletes a memory automatically. Back up both SQLite files to preserve the
+memory store and automation history.
 
 ## Access from another device
 

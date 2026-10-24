@@ -520,3 +520,12 @@ Ennek az eredménye egy kicsi, végig működő és tartósan tároló alap, ame
 - A chat strukturált `tool_call` választ kérhet. A szerver csak a regiszterben szereplő és az `AGENT_TOOLS` beállításban külön engedélyezett műveletet futtatja; bemenetét validálja, az eredményt korlátozza, és kérésenként legfeljebb három olvasási eszközhívást enged.
 - A `weather.getForecast` a helynevet az Open-Meteo geokódoló és előrejelző végpontjának küldi el. A `calendar.getEvents` a helyi `data/calendar.ics` fájlból olvas; az ismétlődő szabályokat jelzi, de nem bontja előfordulásokra. A `notes.search` az aktív, helyben tárolt emlékeket keresi, a meglévő embedding beállítás adatvédelmi szabályával.
 - A Beállítások műveletenként mutatja az engedélyezési állapotot és a külső adatküldést. A chat válasza jelzi a sikeresen használt eszközöket. Nincs író vagy törlő tool művelet.
+
+## v0.5 Automation – megvalósított viselkedés
+
+- Az automatizálásokat az `automations.sqlite` tartós adatbázis őrzi: feladat, trigger, következő időpont, futási állapot, próbálkozások, eredmény és értesítés. Ez a memória JSON kompatibilitási módjától függetlenül SQLite-ot használ.
+- Ismétlődő feladat 15 perctől 7 napig ütemezhető. A `memory.created` és `memory.updated` esemény szintén indíthat aktív feladatot. A folyamat 5 másodpercenként vizsgálja az esedékes időpontokat; hosszabb leálláskor egy kimaradt időpontot futtat, a többit átugorja.
+- Az időzített és eseményfutásokat egyedi kulcs védi az ismételt sorba állítástól. A futás sorba áll, tranzakciósan lefoglalódik, és legfeljebb három próbát kap 30 és 120 másodperces várakozással. Újraindításkor a félbeszakadt futás újrapróbálható.
+- A futás a feladat szövegéből, legfeljebb öt releváns aktív emlékből és külön engedélyezett olvasási eszközökből állít elő értesítést. A feladat nem fogadhat el memóriaíró javaslatot. A feladat, kiválasztott emlékek és eszközeredmények a konfigurált modellhez vagy a bekapcsolt külső eszközvégponthoz kerülhetnek.
+- Sikeres vagy végleg sikertelen futás egy helyi, olvasottként jelölhető értesítést hoz létre. A kezelőfelületen a feladat szüneteltethető, azonnal futtatható, törölhető; a próbálkozások és állapotok megtekinthetők.
+- A scheduler ugyanabban az API-folyamatban fut; ezért az ütemezett feladatokhoz a szervernek működnie kell. A `data/automations.sqlite` adatbázist a memóriaadatbázissal együtt kell menteni.

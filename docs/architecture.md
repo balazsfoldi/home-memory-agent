@@ -1,6 +1,6 @@
 # Architecture
 
-Home Memory Agent v0.4.0 is a single-user modular monolith. One Node.js
+Home Memory Agent v0.5.0 is a single-user modular monolith. One Node.js
 process serves the static React application, REST API, and local SQLite
 memory store. Configured language and embedding models are outbound
 providers; neither receives a repository handle or performs a storage write.
@@ -18,12 +18,16 @@ apps/web ── same-origin JSON API ── apps/api
                                              ├── Open-Meteo weather adapter
                                              ├── local iCalendar adapter
                                              └── local notes search adapter
+                                         └── AutomationService ── SqliteAutomationRepository
+                                             ├── interval scheduler
+                                             ├── memory event queue
+                                             └── in-app notification store
 ```
 
 ## Packages
 
 - `packages/shared` defines runtime-validated request and response
-  schemas and the `Memory`, chat, and settings types. It contains no
+  schemas and the `Memory`, chat, automation, and settings types. It contains no
   credentials or server configuration.
 - `apps/api/src/domain` declares memory, repository, retrieval, and
   provider contracts.
@@ -33,7 +37,7 @@ apps/web ── same-origin JSON API ── apps/api
   LLM adapters, and embedding adapters.
 - `apps/api/src/http` maps validated REST requests to the application and
   hides provider errors and secrets.
-- `apps/web` renders the chat, memory list, and a read-only settings page.
+- `apps/web` renders chat, memories, automation controls, and a read-only settings page.
   It defaults to English, offers Hungarian translations, and saves the
   language choice in browser storage. Its build has no provider credentials.
 - `features/` holds API-facing Cucumber acceptance scenarios.
@@ -61,6 +65,26 @@ The default list and chat context include only non-archived, unexpired
 memories. Archived and expired items remain available in their filtered
 views until explicitly deleted. Chat histories and model proposals stay
 in process memory only.
+
+## Automations
+
+Automation definitions, queued work, attempts, run results, and in-app
+notifications are stored in `automations.sqlite` in the same data directory.
+The memory repository already holds the single-process data-directory lock;
+the automation store uses SQLite transactions and shares that process lifetime.
+The scheduler checks every five seconds, queues interval occurrences with a
+unique idempotency key, and advances overdue schedules without replaying every
+missed interval. Memory create and update events enqueue matching active tasks
+with an event key derived from the memory ID and update timestamp.
+
+Each run is claimed transactionally and gets at most three attempts, with
+bounded exponential retry delays. A process restart requeues interrupted work
+when attempts remain. Completed and terminally failed runs create one local
+notification per run. The automation model receives the task prompt and up to
+five relevant active memories. It may call only read-only operations enabled
+through `AGENT_TOOLS`; it cannot submit memory proposals or mutate the store.
+As with chat, selected memories and tool results can be sent to the configured
+model or the explicitly enabled external tool endpoint.
 
 ## Chat and write approval
 
