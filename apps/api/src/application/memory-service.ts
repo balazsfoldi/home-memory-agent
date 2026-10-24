@@ -7,6 +7,7 @@ import {
   updateMemoryInputSchema,
 } from '@home-memory/shared';
 import type { MemoryRepository } from '../domain/memory-repository.js';
+import type { AutomationEvent } from '../domain/automation-repository.js';
 import { ApplicationError, notFoundError } from '../domain/errors.js';
 import { MemorySearchService } from './memory-search-service.js';
 
@@ -128,6 +129,7 @@ export class MemoryService {
     private readonly now: () => Date = () => new Date(),
     private readonly idFactory: () => string = randomUUID,
     search?: MemorySearchService,
+    private readonly onMemoryEvent?: (event: AutomationEvent) => Promise<void> | void,
   ) {
     this.search = search ?? new MemorySearchService(repository);
   }
@@ -221,6 +223,11 @@ export class MemoryService {
       });
     });
     void this.search.index(memory);
+    await this.publishEvent({
+      type: 'memory.created',
+      memoryId: memory.id,
+      occurredAt: memory.createdAt,
+    });
     return { memory, etag: memoryEtag(memory) };
   }
 
@@ -270,6 +277,11 @@ export class MemoryService {
       return transaction.update(updated);
     });
     void this.search.index(memory);
+    await this.publishEvent({
+      type: 'memory.updated',
+      memoryId: memory.id,
+      occurredAt: memory.updatedAt,
+    });
     return { memory, etag: memoryEtag(memory) };
   }
 
@@ -302,6 +314,11 @@ export class MemoryService {
         updatedAt: this.now().toISOString(),
       });
     });
+    await this.publishEvent({
+      type: 'memory.updated',
+      memoryId: memory.id,
+      occurredAt: memory.updatedAt,
+    });
     return { memory, etag: memoryEtag(memory) };
   }
 
@@ -318,5 +335,9 @@ export class MemoryService {
       }
       transaction.delete(id);
     });
+  }
+
+  private async publishEvent(event: AutomationEvent): Promise<void> {
+    await this.onMemoryEvent?.(event);
   }
 }

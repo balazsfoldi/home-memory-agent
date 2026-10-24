@@ -7,6 +7,7 @@ import type { LlmProvider, LlmRequest, LlmResponse } from '../../src/domain/llm-
 import type { MemoryRepository } from '../../src/domain/memory-repository.js';
 import type { AgentToolName } from '@home-memory/shared';
 import { JsonMemoryRepository } from '../../src/infrastructure/persistence/json-memory-repository.js';
+import { SqliteAutomationRepository } from '../../src/infrastructure/persistence/sqlite-automation-repository.js';
 import { createMemoryApplicationServices } from '../../src/application/repository-memory-service.js';
 import { createApplication } from '../../src/http/application.js';
 
@@ -56,9 +57,12 @@ export async function createTestRuntime(
   });
   const repository = options.repository ?? new JsonMemoryRepository(dataDirectory);
   await repository.initialize();
+  const automationRepository = new SqliteAutomationRepository(dataDirectory);
+  await automationRepository.initialize();
   const provider = new FakeLlmProvider();
   const services = createMemoryApplicationServices({
     repository,
+    automationRepository,
     agentTools: config.agentTools,
     dataDirectory: config.dataPath,
     providerConfigured: options.provider !== false,
@@ -72,6 +76,8 @@ export async function createTestRuntime(
     provider,
     repository,
     close: async () => {
+      await services.automations.stop();
+      await automationRepository.close();
       await repository.close();
       if (!options.dataDirectory) await rm(dataDirectory, { recursive: true, force: true });
     },

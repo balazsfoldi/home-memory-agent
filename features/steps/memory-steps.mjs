@@ -13,6 +13,7 @@ import request from 'supertest';
 import { createMemoryApplicationServices } from '../../apps/api/dist/application/repository-memory-service.js';
 import { loadConfig } from '../../apps/api/dist/config.js';
 import { JsonMemoryRepository } from '../../apps/api/dist/infrastructure/persistence/json-memory-repository.js';
+import { SqliteAutomationRepository } from '../../apps/api/dist/infrastructure/persistence/sqlite-automation-repository.js';
 import { createApplication } from '../../apps/api/dist/http/application.js';
 
 class ScenarioWorld extends World {
@@ -38,6 +39,8 @@ Before(async function () {
   });
   this.repository = new JsonMemoryRepository(this.directory);
   await this.repository.initialize();
+  this.automationRepository = new SqliteAutomationRepository(this.directory);
+  await this.automationRepository.initialize();
   this.fake = {
     name: 'openai-compatible',
     requests: [],
@@ -52,6 +55,7 @@ Before(async function () {
   this.fake.owner = this;
   const services = createMemoryApplicationServices({
     repository: this.repository,
+    automationRepository: this.automationRepository,
     provider: this.fake,
     providerConfigured: true,
     model: 'fake-model',
@@ -60,6 +64,7 @@ Before(async function () {
 });
 
 After(async function () {
+  await this.automationRepository?.close();
   await this.repository?.close();
   if (this.directory) await rm(this.directory, { recursive: true, force: true });
 });
@@ -125,6 +130,7 @@ Given('no language model provider is configured', function () {
   });
   const services = createMemoryApplicationServices({
     repository: this.repository,
+    automationRepository: this.automationRepository,
     providerConfigured: false,
     model: '',
   });
@@ -175,6 +181,63 @@ When('the user says {string}', async function (message) {
 
 When('the user asks {string}', async function (message) {
   this.lastChat = await request(this.app).post('/api/chat').send({ message }).expect(200);
+});
+
+Given(
+  'there is an automation named {string} triggered by {string}',
+  async function (name, triggerType) {
+    const trigger =
+      triggerType === 'interval'
+        ? { type: 'interval', intervalMinutes: 60 }
+        : { type: triggerType };
+    const response = await request(this.app)
+      .post('/api/automations')
+      .send({
+        name,
+        prompt: 'Check relevant information and report a concise result.',
+        trigger,
+      })
+      .expect(201);
+    this.automationId = response.body.id;
+  },
+);
+
+When('the user runs the automation now', async function () {
+  this.lastAutomationRun = await request(this.app)
+    .post(`/api/automations/${this.automationId}/run-now`)
+    .expect(202);
+});
+
+Then('the latest automation run should succeed', async function () {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const response = await request(this.app)
+      .get(`/api/automations/${this.automationId}/runs`)
+      .expect(200);
+    const run = response.body.items[0];
+    if (run?.status === 'succeeded') return;
+    if (run?.status === 'failed') throw new Error('The automation run failed.');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('The automation did not complete in time.');
+});
+
+Then('one unread automation notification should be available', async function () {
+  const response = await request(this.app).get('/api/notifications').expect(200);
+  if (response.body.unread !== 1 || response.body.items.length !== 1)
+    throw new Error('Expected exactly one unread automation notification.');
+  this.automationNotificationId = response.body.items[0].id;
+});
+
+When('the user marks the latest automation notification as read', async function () {
+  await request(this.app)
+    .post(`/api/notifications/${this.automationNotificationId}/read`)
+    .expect(200);
+});
+
+Then('there should be no unread automation notifications', async function () {
+  const response = await request(this.app).get('/api/notifications').expect(200);
+  if (response.body.unread !== 0)
+    throw new Error(`Expected no unread notifications, found ${response.body.unread}.`);
 });
 
 When(

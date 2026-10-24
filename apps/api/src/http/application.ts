@@ -10,7 +10,9 @@ import express, {
 } from 'express';
 import {
   AGENT_TOOL_NAMES,
+  automationStatusInputSchema,
   chatRequestSchema,
+  createAutomationInputSchema,
   createMemoryInputSchema,
   updateMemoryInputSchema,
 } from '@home-memory/shared';
@@ -208,6 +210,74 @@ export function createApplication(
         enabled: config.agentTools.includes(name),
       })),
     });
+  });
+
+  app.get('/api/automations', async (_request, response) => {
+    response.json({ items: await services.automations.list() });
+  });
+
+  app.post('/api/automations', rejectInvalidOrigin, async (request, response) => {
+    const input = createAutomationInputSchema.safeParse(request.body);
+    if (!input.success)
+      throw new ApplicationError(
+        'INVALID_INPUT',
+        'Ellenőrizd az automatizálás nevét, leírását és indítását.',
+        400,
+      );
+    response.status(201).json(await services.automations.create(input.data));
+  });
+
+  app.get('/api/automations/:id/runs', async (request, response) => {
+    response.json({
+      items: await services.automations.listRuns(
+        typeof request.params.id === 'string' ? request.params.id : '',
+      ),
+    });
+  });
+
+  app.post('/api/automations/:id/run-now', rejectInvalidOrigin, async (request, response) => {
+    response
+      .status(202)
+      .json(
+        await services.automations.runNow(
+          typeof request.params.id === 'string' ? request.params.id : '',
+        ),
+      );
+  });
+
+  app.patch('/api/automations/:id', rejectInvalidOrigin, async (request, response) => {
+    const input = automationStatusInputSchema.safeParse(request.body);
+    if (!input.success)
+      throw new ApplicationError(
+        'INVALID_INPUT',
+        'Az automatizálás állapota érvénytelen.',
+        400,
+      );
+    response.json(
+      await services.automations.setStatus(
+        typeof request.params.id === 'string' ? request.params.id : '',
+        input.data.status,
+      ),
+    );
+  });
+
+  app.delete('/api/automations/:id', rejectInvalidOrigin, async (request, response) => {
+    await services.automations.delete(
+      typeof request.params.id === 'string' ? request.params.id : '',
+    );
+    response.status(204).end();
+  });
+
+  app.get('/api/notifications', async (_request, response) => {
+    response.json(await services.automations.notifications());
+  });
+
+  app.post('/api/notifications/:id/read', rejectInvalidOrigin, async (request, response) => {
+    response.json(
+      await services.automations.markNotificationRead(
+        typeof request.params.id === 'string' ? request.params.id : '',
+      ),
+    );
   });
 
   app.get('/api/memories', async (request, response) => {

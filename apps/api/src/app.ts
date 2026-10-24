@@ -6,6 +6,7 @@ import type { LlmProvider } from './domain/llm-provider.js';
 import { createMemoryApplicationServices } from './application/repository-memory-service.js';
 import { JsonMemoryRepository } from './infrastructure/persistence/json-memory-repository.js';
 import { SqliteMemoryRepository } from './infrastructure/persistence/sqlite-memory-repository.js';
+import { SqliteAutomationRepository } from './infrastructure/persistence/sqlite-automation-repository.js';
 import { OllamaProvider } from './infrastructure/llm/ollama-provider.js';
 import { OpenAiCompatibleProvider } from './infrastructure/llm/openai-compatible-provider.js';
 import { ConfiguredEmbeddingProvider } from './infrastructure/embeddings/configured-embedding-provider.js';
@@ -18,6 +19,13 @@ export async function createRuntime(config: AppConfig, repository?: MemoryReposi
       ? new SqliteMemoryRepository(resolve(config.dataPath))
       : new JsonMemoryRepository(resolve(config.dataPath)));
   await memoryRepository.initialize();
+  const automationRepository = new SqliteAutomationRepository(resolve(config.dataPath));
+  try {
+    await automationRepository.initialize();
+  } catch (error) {
+    await memoryRepository.close();
+    throw error;
+  }
   let provider: LlmProvider | undefined;
   if (config.provider === 'openai-compatible') provider = new OpenAiCompatibleProvider(config);
   if (config.provider === 'ollama') provider = new OllamaProvider(config);
@@ -27,6 +35,7 @@ export async function createRuntime(config: AppConfig, repository?: MemoryReposi
     : undefined;
   const services = createMemoryApplicationServices({
     repository: memoryRepository,
+    automationRepository,
     ...(provider ? { provider } : {}),
     ...(embeddingProvider ? { embeddingProvider } : {}),
     agentTools: config.agentTools,
@@ -37,12 +46,18 @@ export async function createRuntime(config: AppConfig, repository?: MemoryReposi
   return {
     app: createApplication(config, services),
     repository: memoryRepository,
-    close: () => memoryRepository.close(),
+    start: () => services.automations.start(),
+    close: async () => {
+      await services.automations.stop();
+      await automationRepository.close();
+      await memoryRepository.close();
+    },
   };
 }
 
 export async function startServer(config: AppConfig): Promise<{ close: () => Promise<void> }> {
   const runtime = await createRuntime(config);
+  runtime.start();
   const server = runtime.app.listen(config.port, config.host, () => {
     console.info(
       JSON.stringify({

@@ -54,6 +54,98 @@ export const chatRequestSchema = z
   })
   .strict();
 
+export const automationTriggerSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('interval'),
+      intervalMinutes: z.number().int().min(15).max(10_080),
+    })
+    .strict(),
+  z.object({ type: z.literal('memory.created') }).strict(),
+  z.object({ type: z.literal('memory.updated') }).strict(),
+]);
+export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
+
+export const createAutomationInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    prompt: z.string().trim().min(1).max(2_000),
+    trigger: automationTriggerSchema,
+  })
+  .strict();
+export type CreateAutomationInput = z.input<typeof createAutomationInputSchema>;
+
+export const automationSchema = z
+  .object({
+    id: z.uuid(),
+    name: z.string().min(1).max(80),
+    prompt: z.string().min(1).max(2_000),
+    trigger: automationTriggerSchema,
+    status: z.enum(['active', 'paused']),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    nextRunAt: z.iso.datetime().nullable(),
+    lastRunAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+export type Automation = z.infer<typeof automationSchema>;
+
+export const automationRunSchema = z
+  .object({
+    id: z.uuid(),
+    automationId: z.uuid(),
+    triggerType: z.enum(['interval', 'manual', 'memory.created', 'memory.updated']),
+    scheduledFor: z.iso.datetime(),
+    startedAt: z.iso.datetime().nullable(),
+    finishedAt: z.iso.datetime().nullable(),
+    status: z.enum(['queued', 'running', 'succeeded', 'failed']),
+    attempt: z.number().int().min(0).max(3),
+    result: z.string().max(8_000).nullable(),
+    error: z.string().max(300).nullable(),
+  })
+  .strict();
+export type AutomationRun = z.infer<typeof automationRunSchema>;
+
+export const automationNotificationSchema = z
+  .object({
+    id: z.uuid(),
+    runId: z.uuid(),
+    automationId: z.uuid(),
+    title: z.string().min(1).max(100),
+    message: z.string().min(1).max(8_000),
+    createdAt: z.iso.datetime(),
+    readAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+export type AutomationNotification = z.infer<typeof automationNotificationSchema>;
+
+export const automationListResponseSchema = z
+  .object({ items: z.array(automationSchema) })
+  .strict();
+export const automationRunListResponseSchema = z
+  .object({ items: z.array(automationRunSchema) })
+  .strict();
+export const automationNotificationListResponseSchema = z
+  .object({
+    items: z.array(automationNotificationSchema),
+    unread: z.number().int().nonnegative(),
+  })
+  .strict();
+export const automationStatusInputSchema = z
+  .object({ status: z.enum(['active', 'paused']) })
+  .strict();
+
+export const automationDecisionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('answer'), message: z.string().min(1).max(8_000) }).strict(),
+  z
+    .object({
+      kind: z.literal('tool_call'),
+      name: agentToolNameSchema,
+      input: z.record(z.string(), z.unknown()),
+    })
+    .strict(),
+]);
+
 export const memoryActionSchema = z.discriminatedUnion('action', [
   z
     .object({
