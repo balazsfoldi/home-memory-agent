@@ -21,7 +21,7 @@ memories to your preferred LLM when needed.
 
 🚧 Early development / experimental
 
-The current application version is **v0.5.0**. The project is under active
+The current application version is **v1.0.0**. The project is under active
 development and is not yet recommended for production use.
 
 See [GitHub Releases](https://github.com/balazsfoldi/home-memory-agent/releases)
