@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: home-memory-agent:local
+    image: ghcr.io/balazsfoldi/home-memory-agent:latest
     restart: unless-stopped
     env_file:
       - path: .env
