@@ -1,6 +1,6 @@
 # Architecture
 
-Home Memory Agent v0.5.0 is a single-user modular monolith. One Node.js
+Home Memory Agent v1.0.0 is a single-user modular monolith. One Node.js
 process serves the static React application, REST API, and local SQLite
 memory store. Configured language and embedding models are outbound
 providers; neither receives a repository handle or performs a storage write.

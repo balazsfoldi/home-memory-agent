@@ -644,7 +644,7 @@ function AppContent() {
         <div className="sidebar-footer">
           <span className="footer-avatar">H</span>
           <span>Home Memory Agent</span>
-          <span className="version-tag">v0.5</span>
+          <span className="version-tag">v1.0</span>
         </div>
       </aside>
 
